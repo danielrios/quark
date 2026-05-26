@@ -1,5 +1,12 @@
 # Agent Operating Rules & Constraints
 
+## Project Context (optional, for more context if needed)
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — pipeline shape, layered packages, what's actually built today vs. what's designed.
+- [docs/adr/](./docs/adr/) — load-bearing decisions with context, alternatives, and revisit triggers.
+- [docs/superpowers/specs/](./docs/superpowers/specs/) — design specs (slice 1 spec is the destination, not the current state).
+- [docs/superpowers/plans/](./docs/superpowers/plans/) — ordered implementation plans; do not skip ahead.
+
 ## 1. System Environment & Stack
 - Core Stack: Java 25, Quarkus 3.35.4, Gradle Kotlin DSL (`./gradlew`), langchain4j via Quarkiverse. Package root `com.quark`.
 - Code Style: idiomatic Quarkus/CDI; virtual threads first-class; no raw `mvn`/`gradle` invocations while dev mode runs (use the quarkus-agent MCP).
