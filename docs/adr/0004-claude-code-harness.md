@@ -32,7 +32,7 @@ build/CI tooling that backs CLAUDE.md with enforcement and ergonomics.
 │   ├── session-start.sh     # advisory: Java25 / gradlew / MCP detection
 │   ├── pre-bash-guard.sh    # hard-block foreground quarkusDev
 │   ├── post-edit-reminder.sh# advisory: remind to run baseline test
-│   └── stop-progress-check.sh# advisory: warn on uncommitted edits w/o PROGRESS.md update
+│   └── stop-progress-check.sh# advisory: warn on uncommitted edits w/o docs/progress.md update
 ├── commands/
 │   ├── baseline-test.md     # /baseline-test
 │   └── progress.md          # /progress <task>
@@ -45,7 +45,7 @@ build/CI tooling that backs CLAUDE.md with enforcement and ergonomics.
 |---|---|
 | No foreground `./gradlew quarkusDev` (§2 Non-Interactive) | **Hard block** via `permissions.deny` and `pre-bash-guard.sh`. Code 2 exit, stderr explains the MCP path. |
 | Baseline test before/after edits (§3) | **Advisory** — `post-edit-reminder.sh` prints a reminder after every Edit/Write. Test cannot be programmatically forced without the MCP being reachable. |
-| State rule (§2) — commit or PROGRESS.md | **Advisory** — `stop-progress-check.sh` warns when edits happen with no PROGRESS.md / commit update. Global stop-hook still enforces commit+push at session exit. |
+| State rule (§2) — commit or `docs/progress.md` | **Advisory** — `stop-progress-check.sh` warns when edits happen with no `docs/progress.md` / commit update. Global stop-hook still enforces commit+push at session exit. |
 | WIP=1 (§2) | **Not automatable** — single-file constraint is intent, not syntax. |
 | 3-failure escalation (§4) | **Not automatable here** — depends on test-runner output that lives in the MCP. Future work. |
 
@@ -104,7 +104,7 @@ that is plan-7 territory per ADR 0003.
 - Routine commands no longer prompt. Agent sessions feel quieter and faster.
 - The one truly dangerous bash invocation (`quarkusDev` in foreground) is now
   prevented at the harness layer, not at the agent's discretion.
-- Onboarding a new session shows the current PROGRESS.md task and surfaces
+- Onboarding a new session shows the current `docs/progress.md` task and surfaces
   any setup gaps in the first 10 lines of output.
 - CI catches formatting drift before review.
 - `.claude/settings.json`, `hooks/`, and `commands/` are tracked in git, so

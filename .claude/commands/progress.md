@@ -1,5 +1,5 @@
 ---
-description: Append a structured entry to PROGRESS.md per CLAUDE.md §2 state rule
+description: Append a structured entry to docs/progress.md per CLAUDE.md §2 state rule
 argument-hint: "<one-line task or status update>"
 allowed-tools: [Read, Edit]
 ---

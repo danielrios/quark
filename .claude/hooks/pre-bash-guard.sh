@@ -6,13 +6,15 @@ set -u
 
 payload="$(cat)"
 
-# Parse command from JSON. Prefer jq for correctness; fall back to greedy sed.
-if command -v jq >/dev/null 2>&1; then
-  cmd="$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null || true)"
-else
-  cmd="$(printf '%s' "$payload" | tr '\n' ' ' | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/p')"
+# Parse command from JSON. jq is required for reliable parsing — sed fallback
+# is false-positive-prone on payloads with multiple quoted fields, so we fail
+# open (allow) with a warning rather than risk a wrong block.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "pre-bash-guard.sh: jq not on PATH — skipping bash guard (install jq to re-enable)." >&2
+  exit 0
 fi
 
+cmd="$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null || true)"
 [[ -z "$cmd" ]] && exit 0
 
 # Patterns the allow/deny syntax in settings.json can't express on its own
