@@ -39,7 +39,11 @@ tasks.withType<JavaCompile> {
 spotless {
     java {
         target("src/**/*.java")
-        palantirJavaFormat("2.50.0")
+        // Heavy Java formatters (Google JavaFormat, Palantir) call into javac internals
+        // and break across JDK versions — on JDK 25 they throw NoSuchMethodError against
+        // com.sun.tools.javac.util.Log$DeferredDiagnosticHandler. Keeping only the
+        // string-level rules until a JDK-25-stable formatter ships.
+        // See docs/adr/0004-claude-code-harness.md "Revisit if".
         trimTrailingWhitespace()
         endWithNewline()
     }

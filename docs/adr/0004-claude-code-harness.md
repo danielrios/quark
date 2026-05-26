@@ -88,9 +88,20 @@ the MCP can amend this ADR with the canonical configuration.
 
 ### Dev tooling
 
-Spotless (Google Java Format 1.22.0) wired into `check`, so `./gradlew test`
-flags formatting drift. No Checkstyle, no error-prone — Spotless covers the
-highest-leverage 95% with one plugin and zero rule curation.
+Spotless 7.0.4 wired into `check`, so `./gradlew test` flags formatting drift.
+Configured with `trimTrailingWhitespace()` and `endWithNewline()` for Java,
+Gradle Kotlin DSL, and markdown — pure string-level rules with no JDK
+coupling.
+
+**Heavy Java formatter intentionally deferred.** We tried Google Java Format
+1.22.0/1.24.0 and Palantir Java Format 2.50.0 in three CI rounds on Temurin
+25; all three threw `NoSuchMethodError` against
+`com.sun.tools.javac.util.Log$DeferredDiagnosticHandler.getDiagnostics()`.
+Both formatters call into javac internals as a parser, and JDK 25 changed
+that method's signature. Per CLAUDE.md §6 YAGNI: a heavy formatter on three
+skeleton files is not worth a CI workaround (e.g. running Spotless under
+a separate JDK 21 toolchain). Revisit once a JDK-25-stable version of either
+formatter ships.
 
 ### CI
 
@@ -131,6 +142,11 @@ that is plan-7 territory per ADR 0003.
   and update `session-start.sh` to do a real reachability check.
 - A second formatter or linter becomes worthwhile (e.g. ArchUnit enforcement
   in plan 7 — that runs as a test, not via Spotless).
+- A JDK-25-stable release of Google Java Format or Palantir Java Format ships.
+  Add it back to the `spotless { java { ... } }` block in `build.gradle.kts`
+  and run `./gradlew spotlessApply` once to bring the existing source in line.
+  The Spotless config already targets `src/**/*.java` — only the formatter
+  step itself is missing.
 - Hook noise becomes a problem. Consider moving from per-event stderr prints
   to a single `.claude/state/session.log` that the agent can `Read` on demand.
 - The allowlist needs expansion as the project grows. Add new patterns here,
