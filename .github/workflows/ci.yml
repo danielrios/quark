@@ -37,7 +37,18 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Spotless check
+        id: spotless
         run: ./gradlew --no-daemon --stacktrace spotlessCheck
+
+      - name: Spotless diagnostic (on failure)
+        if: failure() && steps.spotless.outcome == 'failure'
+        run: |
+          echo "::group::spotlessApply output"
+          ./gradlew --no-daemon spotlessApply || true
+          echo "::endgroup::"
+          echo "::group::Diff Spotless would apply"
+          git --no-pager diff --no-color
+          echo "::endgroup::"
 
       - name: Test
         run: ./gradlew --no-daemon --stacktrace test

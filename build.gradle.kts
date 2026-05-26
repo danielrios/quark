@@ -39,7 +39,7 @@ tasks.withType<JavaCompile> {
 spotless {
     java {
         target("src/**/*.java")
-        googleJavaFormat("1.24.0")
+        palantirJavaFormat("2.50.0")
         trimTrailingWhitespace()
         endWithNewline()
     }
