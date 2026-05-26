@@ -6,15 +6,18 @@ set -u
 
 payload="$(cat)"
 
-# Pull command out of the JSON without requiring jq.
-# Tolerate single-line or pretty-printed input.
-cmd="$(printf '%s' "$payload" | tr '\n' ' ' | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/p')"
-
-if [[ -z "$cmd" ]]; then
-  exit 0
+# Parse command from JSON. Prefer jq for correctness; fall back to greedy sed.
+if command -v jq >/dev/null 2>&1; then
+  cmd="$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null || true)"
+else
+  cmd="$(printf '%s' "$payload" | tr '\n' ' ' | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/p')"
 fi
 
-# Patterns that block the session (CLAUDE.md "Non-Interactive" rule).
+[[ -z "$cmd" ]] && exit 0
+
+# Patterns the allow/deny syntax in settings.json can't express on its own
+# (pipes, command chains, regex on args). Keep settings.json as the visible
+# source of truth for plain prefix matches; this hook covers patterns only.
 deny_patterns=(
   'quarkusDev'
   '--continuous'

@@ -44,10 +44,11 @@ fi
 
 # --- Banner ------------------------------------------------------------------
 echo "── quark harness ──────────────────────────────────────────────"
-if [[ -f "${PROJECT_DIR}/PROGRESS.md" ]]; then
-  current="$(grep -m1 '^- \[ \]' "${PROJECT_DIR}/PROGRESS.md" 2>/dev/null || true)"
+if [[ -f "${PROJECT_DIR}/docs/progress.md" ]]; then
+  # First bullet under '## Current Task' (or legacy '## Current Goal').
+  current="$(awk '/^## (Current Task|Current Goal)/{flag=1;next} /^## /{flag=0} flag && /^- /{print;exit}' "${PROJECT_DIR}/docs/progress.md" 2>/dev/null || true)"
   if [[ -n "$current" ]]; then
-    echo "next task:${current#- \[ \]}"
+    echo "next task: ${current#- }"
   fi
 fi
 if (( ${#warnings[@]} > 0 )); then

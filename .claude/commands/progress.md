@@ -4,7 +4,7 @@ argument-hint: "<one-line task or status update>"
 allowed-tools: [Read, Edit]
 ---
 
-Append a new entry to `PROGRESS.md` under the "Active Trajectory Logs / Error Traces" section.
+Append a new entry to `docs/progress.md` under the "Active Trajectory Logs / Error Traces" section. Insert at the TOP of that section (most recent first), and trim entries older than the last 3 — older state lives in git log / PR bodies, not here.
 
 The entry must follow this exact shape:
 
@@ -16,4 +16,4 @@ The entry must follow this exact shape:
 
 If `$ARGUMENTS` is empty, ask the user for a one-line summary before writing anything. Never invent task content. After editing, show the diff of just the appended lines so the user can confirm.
 
-This is the only correct way to record in-flight state per CLAUDE.md §2 ("If a file change or intent is not committed to Git or written to PROGRESS.md, it does not exist.").
+This is the only correct way to record in-flight state per CLAUDE.md §2 ("If a file change or intent is not committed to Git or written to `docs/progress.md`, it does not exist.").
