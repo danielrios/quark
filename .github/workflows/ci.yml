@@ -17,6 +17,10 @@ jobs:
     name: Build & test (Temurin 25)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -33,10 +37,10 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Spotless check
-        run: ./gradlew --no-daemon spotlessCheck
+        run: ./gradlew --no-daemon --stacktrace spotlessCheck
 
       - name: Test
-        run: ./gradlew --no-daemon test
+        run: ./gradlew --no-daemon --stacktrace test
 
       - name: Publish test report
         if: always()

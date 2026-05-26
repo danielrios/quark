@@ -1,7 +1,7 @@
 plugins {
     java
     id("io.quarkus")
-    id("com.diffplug.spotless") version "6.25.0"
+    id("com.diffplug.spotless") version "7.0.4"
 }
 
 repositories {
@@ -39,7 +39,7 @@ tasks.withType<JavaCompile> {
 spotless {
     java {
         target("src/**/*.java")
-        googleJavaFormat("1.22.0")
+        googleJavaFormat("1.24.0")
         trimTrailingWhitespace()
         endWithNewline()
     }
