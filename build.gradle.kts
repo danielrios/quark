@@ -1,6 +1,7 @@
 plugins {
     java
     id("io.quarkus")
+    id("com.diffplug.spotless") version "6.25.0"
 }
 
 repositories {
@@ -33,4 +34,27 @@ java {
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
     options.compilerArgs.add("-parameters")
+}
+
+spotless {
+    java {
+        target("src/**/*.java")
+        googleJavaFormat("1.22.0")
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    kotlinGradle {
+        target("*.gradle.kts")
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    format("misc") {
+        target("*.md", ".gitignore")
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
+
+tasks.named("check") {
+    dependsOn("spotlessCheck")
 }

@@ -24,3 +24,12 @@
 ## 4. Failure Escalation (Stop Hooks)
 - If a test fails 3 times consecutively with the same error, STOP execution immediately.
 - Do not attempt a 4th time. Write the exact stack trace to `PROGRESS.md` and ask the human for clarification.
+
+## 5. Harness Affordances (`.claude/`)
+- Permissions are pre-approved for: `Read`, `Edit`, `Write`, read-only `git` (`status`/`diff`/`log`/`show`/`branch`/`fetch`), non-dev-mode `./gradlew` (`test`, `check`, `compileJava`, `spotless*`, `build -x test`, `tasks`), and the `mcp__quarkus-agent__*` namespace. Anything that writes (commits, pushes, gradle clean) still prompts.
+- **Hard-blocked at the harness layer:** `./gradlew quarkusDev` and friends. Use the `quarkus-agent` MCP (`quarkus_start`, `quarkus_status`, `quarkus_logs`) per §2.
+- Slash commands:
+  - `/baseline-test` — invokes the `quarkus-agent` MCP test gate (CLAUDE.md §3) and reports results.
+  - `/progress <one-liner>` — appends a timestamped entry to `PROGRESS.md` (CLAUDE.md §2 state rule).
+- SessionStart prints the current PROGRESS.md task and warns if Java 25 / `gradlew` / `quarkus-agent` MCP are missing.
+- Full design rationale: [`docs/adr/0004-claude-code-harness.md`](./docs/adr/0004-claude-code-harness.md).

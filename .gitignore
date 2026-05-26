@@ -43,5 +43,12 @@ nb-configuration.xml
 # Local MCP / AI tool configs (may contain secrets)
 .ai/
 .roo/
-.claude/
 .quarkus/
+
+# Claude Code harness: ignore local/state files but track shared config
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/commands/
+.claude/settings.local.json
+.claude/state/
