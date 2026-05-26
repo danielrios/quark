@@ -38,20 +38,41 @@ jobs:
 
       - name: Spotless check
         id: spotless
+        continue-on-error: true
         run: ./gradlew --no-daemon --stacktrace spotlessCheck
 
-      - name: Spotless diagnostic (on failure)
-        if: failure() && steps.spotless.outcome == 'failure'
+      - name: Spotless diagnostic (post diff to PR on failure)
+        if: steps.spotless.outcome == 'failure' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "::group::spotlessApply output"
           ./gradlew --no-daemon spotlessApply || true
-          echo "::endgroup::"
-          echo "::group::Diff Spotless would apply"
-          git --no-pager diff --no-color
-          echo "::endgroup::"
+          DIFF="$(git --no-pager diff --no-color | head -c 50000)"
+          if [ -z "$DIFF" ]; then
+            DIFF="(spotlessApply produced no diff — Spotless is failing for a non-formatting reason; check the spotlessCheck step log)"
+          fi
+          {
+            printf '## Spotless CI diagnostic (auto-posted)\n\n'
+            printf 'Run: %s\n\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            printf 'Diff that `./gradlew spotlessApply` would produce on Temurin 25:\n\n'
+            printf '```diff\n%s\n```\n' "$DIFF"
+          } > /tmp/diag.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/diag.md
+          git checkout -- . || true
 
       - name: Test
+        id: test
+        continue-on-error: true
         run: ./gradlew --no-daemon --stacktrace test
+
+      - name: Fail if any required step failed
+        if: steps.spotless.outcome == 'failure' || steps.test.outcome == 'failure'
+        run: |
+          echo "Job result summary:"
+          echo "  spotless: ${{ steps.spotless.outcome }}"
+          echo "  test:     ${{ steps.test.outcome }}"
+          echo "(diagnostic comments posted to PR on failure of spotless step)"
+          exit 1
 
       - name: Publish test report
         if: always()
