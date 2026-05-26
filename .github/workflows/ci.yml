@@ -36,29 +36,37 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
+      - name: Gradle version
+        run: ./gradlew --version
+
       - name: Spotless check
         id: spotless
         continue-on-error: true
-        run: ./gradlew --no-daemon --stacktrace spotlessCheck
+        run: |
+          set -o pipefail
+          ./gradlew --stacktrace --info spotlessCheck 2>&1 | tee /tmp/spotless-check.log
 
-      - name: Spotless diagnostic (post diff to PR on failure)
+      - name: Spotless diagnostic (post stderr+diff to PR on failure)
         if: steps.spotless.outcome == 'failure' && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./gradlew --no-daemon spotlessApply || true
-          DIFF="$(git --no-pager diff --no-color | head -c 50000)"
-          if [ -z "$DIFF" ]; then
-            DIFF="(spotlessApply produced no diff — Spotless is failing for a non-formatting reason; check the spotlessCheck step log)"
-          fi
+          # Capture spotlessCheck tail (the failing run).
+          CHECK_TAIL="$(tail -150 /tmp/spotless-check.log 2>/dev/null || echo '(spotless-check.log missing)')"
+          # Run apply with full output capture (no || mask).
+          APPLY_OUT="$(./gradlew --stacktrace spotlessApply 2>&1 || true)"
+          APPLY_TAIL="$(printf '%s' "$APPLY_OUT" | tail -120)"
+          DIFF="$(git --no-pager diff --no-color | head -c 20000)"
+          [ -z "$DIFF" ] && DIFF="(no diff — apply did not modify files)"
           {
-            printf '## Spotless CI diagnostic (auto-posted)\n\n'
+            printf '## Spotless CI diagnostic\n\n'
             printf 'Run: %s\n\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-            printf 'Diff that `./gradlew spotlessApply` would produce on Temurin 25:\n\n'
-            printf '```diff\n%s\n```\n' "$DIFF"
+            printf '### spotlessCheck stderr (last 150 lines)\n```\n%s\n```\n\n' "$CHECK_TAIL"
+            printf '### spotlessApply stderr (last 120 lines)\n```\n%s\n```\n\n' "$APPLY_TAIL"
+            printf '### Diff that spotlessApply produced\n```diff\n%s\n```\n' "$DIFF"
           } > /tmp/diag.md
           gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/diag.md
-          git checkout -- . || true
+          git checkout -- . 2>/dev/null || true
 
       - name: Test
         id: test
