@@ -11,10 +11,19 @@ Format: [Michael Nygard's lightweight ADR template](https://github.com/joelparke
 Filename convention: `NNNN-kebab-case-title.md`, where `NNNN` is a
 zero-padded sequence number starting at `0001`. Do not reuse numbers.
 
+> Several of these ADRs describe the **destination** architecture, which
+> the MVP intentionally does not yet implement. See
+> [ADR 0003](0003-walking-skeleton-first-plan-sequencing.md) for the
+> sequencing, and the "Today vs Destination" split in
+> [`ARCHITECTURE.md`](../../ARCHITECTURE.md) for which decisions are
+> active right now.
+
 ## Index
 
 | # | Title | Status |
 |---|---|---|
-| [0001](0001-event-driven-agentevent-stream.md) | Event-driven `AgentEvent` stream as the runtime contract | Accepted |
-| [0002](0002-single-quarkus-module-archunit-boundaries.md) | Single Quarkus module with package boundaries enforced by ArchUnit | Accepted |
+| [0001](0001-event-driven-agentevent-stream.md) | Event-driven `AgentEvent` stream as the runtime contract | Accepted (destination; implemented from Plan 4) |
+| [0002](0002-single-quarkus-module-archunit-boundaries.md) | Single Quarkus module, with package boundaries enforced by ArchUnit at the refactor phase | Accepted (single-module now; ArchUnit from Plan 7) |
 | [0003](0003-walking-skeleton-first-plan-sequencing.md) | Walking-skeleton-first plan sequencing | Accepted |
+| [0004](0004-claude-code-harness.md) | Claude Code harness configuration | Accepted |
+| [0005](0005-release-please-automation.md) | Release automation with release-please | Accepted |

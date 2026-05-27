@@ -1,86 +1,219 @@
 # 0001 — Event-driven `AgentEvent` stream as the runtime contract
 
-**Status:** Accepted, 2026-05-25
-**Deciders:** Daniel (project owner) + brainstorming session
-**Context refs:** [`docs/superpowers/specs/2026-05-25-agent-runtime-slice-1-design.md`](../superpowers/specs/2026-05-25-agent-runtime-slice-1-design.md) §3.3
+**Status:** Accepted, 2026-05-25. Implementation deferred to Plan 4 per [ADR 0003](0003-walking-skeleton-first-plan-sequencing.md).
+**Deciders:** Daniel (project owner) + architecture brainstorming sessions.
+
+**Related documents:**
+- [`ARCHITECTURE.md`](../../ARCHITECTURE.md) — "Destination" section.
+- [`docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md`](../superpowers/specs/2026-05-25-agent-runtime-mvp.md) — MVP design.
+- [ADR 0003](0003-walking-skeleton-first-plan-sequencing.md) — when this contract is introduced.
+
+---
+
+## Status note
+
+This ADR describes the **destination** runtime contract. The MVP does
+not implement it — the MVP streams `Multi<String>` directly out of
+`ChatService`. The contract described here is introduced in Plan 4,
+which extracts `AgentRuntime`, `AgentEvent`, `ModelGateway`, and
+`ChatMemoryStore` from the working MVP code.
+
+The decision is recorded now so MVP code can be shaped to refactor into
+it cleanly later, and so that the architectural intent is not lost
+between the MVP shipping and the refactor landing.
+
+---
 
 ## Context
 
-`quark` will eventually support tools, planning, retrieval-augmented memory,
-and an async reflection pipeline. Each of those stages produces *information*
-beyond text — tool invocations, plan steps, retrieval hits, reflection
-artefacts — that adapters (REST/SSE, Telegram, future UIs) may want to
-project differently.
+`quark` is intended to evolve beyond a simple chat interface. The
+roadmap includes:
 
-The earliest sketch of the runtime modelled a turn as `Multi<String>`
-(streaming chat tokens). That works for a token-by-token chat UI and almost
-nothing else: there is no place to emit `ToolInvoked`, no place for
-`PlanStepStarted`, no way for a renderer to distinguish "model finished"
-from "the next planning step is starting". Adding those stages to a
-`Multi<String>` runtime would either smuggle structured data into
-out-of-band channels or force a breaking change later when the absent
-abstraction finally bites.
+- tool execution,
+- planning / executor decomposition,
+- retrieval-augmented memory,
+- reflection pipelines,
+- multi-provider orchestration,
+- additional transports and renderers.
 
-The alternative considered seriously: keep `Multi<String>` for slice 1 and
-swap to a typed event stream when tools land in a later slice. Rejected
-because every adapter and every test would be rewritten at that point, and
-the slice that introduces tools would mix "add tools" with "redesign the
-core contract" — two concerns in one change.
+Each of those produces information that is not plain text:
+
+- tool invocations,
+- plan step transitions,
+- retrieval results,
+- memory operations,
+- provider lifecycle events,
+- partial failures,
+- reasoning metadata.
+
+The earliest sketch modelled execution as:
+
+```java
+Multi<String>
+```
+
+That is sufficient for token streaming and almost nothing else. Once
+the runtime emits anything non-text, the `Multi<String>` contract
+forces a choice:
+
+- smuggle structured data through side channels (logs, metrics,
+  ad-hoc parsing), or
+- redesign every adapter, renderer, and test the day tools land.
+
+The second is a load-bearing refactor coupled with a feature change.
+That coupling was judged too expensive.
+
+---
 
 ## Decision
 
-The runtime's public contract is `Multi<AgentEvent> execute(TurnRequest)`,
-where `AgentEvent` is a sealed interface with one variant per kind of
-information the runtime emits during a turn. Slice 1 ships seven variants:
-`TurnStarted`, `MemoryLoaded`, `ModelInvoked`, `TokenEmitted`,
-`ModelCompleted`, `TurnCompleted`, `TurnFailed`. Every variant carries
-`turnId` for correlation. The terminal event is always exactly one of
-`TurnCompleted` or `TurnFailed`, after which the `Multi` completes
-normally (no `onError`).
+When extracted in Plan 4, the runtime contract becomes:
 
-Transport adapters subscribe to the stream and project events into their
-channel:
+```java
+Multi<AgentEvent> execute(TurnRequest request)
+```
 
-- SSE emits one SSE event per `AgentEvent`, named after the variant.
-- Telegram accumulates `TokenEmitted` payloads and edits a chat message on
-  a throttled cadence, finalising on the terminal event.
+`AgentEvent` is a sealed interface representing every meaningful
+runtime event during a turn. Initial variants:
 
-New event variants added in later slices (tools, planning, retrieval) are
-ignored by existing renderers — additive forward compatibility.
+- `TurnStarted`
+- `MemoryLoaded`
+- `ModelInvoked`
+- `TokenEmitted`
+- `ModelCompleted`
+- `TurnCompleted`
+- `TurnFailed`
 
-LangChain4j's `@RegisterAiService` is permitted only *inside* the
-`provider.*` packages, where it is an implementation detail of a
-`ModelGateway`. It is never exposed as the runtime's foundation.
+Every event carries a `turnId` for correlation.
+
+The runtime guarantees:
+
+- exactly one terminal event (`TurnCompleted` or `TurnFailed`),
+- the `Multi` completes normally afterward,
+- failures are events, not `onError()`.
+
+Transport adapters consume the same stream and project it into
+transport-specific behavior:
+
+| Adapter      | Projection                                  |
+|--------------|---------------------------------------------|
+| SSE          | one SSE event per `AgentEvent`              |
+| Telegram     | throttled edits driven by `TokenEmitted`    |
+| future       | arbitrary projections over the same stream  |
+
+Future capabilities extend the runtime *additively* through:
+
+- new pipeline stages,
+- new `AgentEvent` variants,
+- new renderers,
+- new provider implementations,
+
+without changing the execution contract itself.
+
+`langchain4j` integrations remain implementation details inside
+`provider.*` packages. They are not the architectural center of the
+runtime.
+
+---
 
 ## Consequences
 
 ### Positive
-- Adding tools, planning, or retrieval in later slices is additive: new
-  pipeline stages emit new event variants, existing renderers and tests are
-  unchanged.
-- Renderers stay simple — one subscription, no exception handling, no
-  parallel out-of-band channels.
-- Observability is uniform: a single runtime subscriber logs every event
-  with `turnId` in MDC; Micrometer counters are one-per-variant.
-- The `Multi`-completes-normally-on-failure invariant means cancellation
-  and termination paths are unambiguous.
+
+**Additive evolution.** Tools, planning, retrieval, and reflection can
+be introduced without redesigning the runtime surface. The event stream
+becomes the stable execution backbone.
+
+**Transport independence.** Adapters are projection layers, not
+orchestration layers. REST, SSE, Telegram, CLI, future frontends all
+consume the same stream.
+
+**Uniform observability.** Every execution stage emits structured
+events correlated by `turnId`. Structured logging, event-level metrics,
+execution tracing, replay tooling, and timeline visualizations all
+build on the same primitive, with no transport-specific instrumentation.
+
+**Explicit lifecycle.** Execution state is explicit — started, memory
+loaded, provider invoked, streaming, completed, failed — instead of
+inferred indirectly from token streams or exceptions.
+
+**Failures become data.** Renderers no longer need separate exception
+channels or transport-specific recovery logic. The invariant is "every
+turn ends with exactly one terminal event."
 
 ### Negative
-- More upfront types and machinery than `Multi<String>`. The walking
-  skeleton (plan 1) deliberately does not pay this cost — see
-  [ADR 0003](0003-walking-skeleton-first-plan-sequencing.md) — but the
-  cost lands in plan 4 when the abstractions are extracted.
-- "All renderers ignore unknown events" is a discipline rule, not enforced
-  by the type system. A renderer that switches over the sealed interface
-  and demands exhaustiveness would break on every new variant. Renderers
-  must use a non-exhaustive pattern.
-- `AgentEvent` is part of the public-ish API of the runtime module.
-  Renaming or removing variants is a breaking change to every adapter.
 
-### Mitigations
-- ArchUnit ([ADR 0002](0002-single-quarkus-module-archunit-boundaries.md))
-  enforces that the runtime never depends on a concrete adapter, so the
-  blast radius of contract changes is bounded to renderers we control.
-- A renderer-base-class or helper utility can absorb the
-  ignore-unknown-events pattern so individual renderers do not each
-  reimplement it.
+**Upfront complexity.** `Multi<AgentEvent>` introduces more types and
+infrastructure than a minimal token stream. This is exactly why the
+MVP defers it (see [ADR 0003](0003-walking-skeleton-first-plan-sequencing.md))
+— the cost is paid when there is enough working code to shape the
+contract correctly.
+
+**Renderer discipline required.** Renderers must tolerate unknown event
+variants. Exhaustively switching over the sealed hierarchy would force
+renderer changes every time a new event type is introduced. The
+expected pattern is:
+
+```java
+if (event instanceof TokenEmitted token) { ... }
+```
+
+not exhaustive `switch`.
+
+**Event schema is architectural surface.** Once `AgentEvent` exists,
+removing or renaming variants is a breaking architectural change. That
+stability requirement is accepted.
+
+---
+
+## Rejected alternatives
+
+### `Multi<String>` as the runtime contract
+
+Rejected because:
+
+- it cannot model non-token execution stages,
+- it forces structured data into side channels,
+- it couples "add tools" with "redesign runtime."
+
+`Multi<String>` is what the MVP uses *as a deliberate exception* —
+ChatService returns string streams directly, and the runtime contract
+is only extracted in Plan 4 once the working code justifies its shape.
+
+### Provider-native orchestration (`AiService` as the core)
+
+Rejected because:
+
+- provider SDK abstractions become the architectural center,
+- execution lifecycle becomes opaque to renderers,
+- transport / rendering concerns leak into provider integrations,
+- non-LLM stages (tools, retrieval, planning) cannot be expressed
+  uniformly.
+
+Provider SDKs are infrastructure details. Orchestration belongs to
+`AgentRuntime`.
+
+---
+
+## Mitigations
+
+- ArchUnit (Plan 7) enforces package boundaries so adapters cannot
+  reach directly into providers or runtime internals — see
+  [ADR 0002](0002-single-quarkus-module-archunit-boundaries.md).
+- Renderer helper utilities may centralise "ignore unknown events"
+  behaviour.
+- The runtime remains transport-agnostic and provider-agnostic by
+  construction.
+
+---
+
+## Long-term impact
+
+This ADR defines the fundamental architectural shape of `quark` after
+the walking skeleton phase ends. The premise:
+
+> execution is modelled as an observable stream of typed events, not as
+> a chat response.
+
+Everything else in the destination architecture follows from that
+premise.

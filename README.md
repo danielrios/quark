@@ -1,67 +1,142 @@
 # quark
 
-An event-driven agent runtime built on Quarkus.
+A compact streaming-first runtime for LLM-driven conversation, built on
+Quarkus.
 
-The codebase is in early bootstrap: the runtime itself is not implemented
-yet. The current state is a fresh Quarkus 3.35.4 / Java 25 skeleton
-generated from `code.quarkus.io` with `langchain4j-core` on the classpath.
+The MVP receives a message, calls a model, streams a reply, remembers a
+few turns of context, and ships that experience over Telegram and HTTP.
 
-## Design
+The long-term ambition is a more general agent runtime — tools, planning,
+reflection, episodic memory, multi-provider orchestration. That work
+intentionally does not start yet. See [`MANIFESTO.md`](MANIFESTO.md) for
+the engineering thesis and [`ARCHITECTURE.md`](ARCHITECTURE.md) for both
+the current shape and the destination shape.
 
-The slice 1 design lives at
-[`docs/superpowers/specs/2026-05-25-agent-runtime-slice-1-design.md`](docs/superpowers/specs/2026-05-25-agent-runtime-slice-1-design.md).
+---
 
-In short, slice 1 ships an observable, streaming-first execution runtime:
+## What's actually here today
 
-- `AgentRuntime` orchestration core emitting a typed `Multi<AgentEvent>`.
-- Two transport adapters: REST + SSE, and Telegram (long-polling).
-- Two `ModelGateway` implementations: Google Gemini and NVIDIA NIM (via
-  the OpenAI-compatible API).
-- In-process working memory and provider preference store, both behind
-  SPIs designed to swap to Redis/Postgres in later slices.
-- ArchUnit-enforced package boundaries.
+A bootstrapped Quarkus 3.35.4 / Java 25 / Gradle project with
+`quarkus-langchain4j-core` on the classpath and a generated
+`GreetingResource`.
 
-Tools, planning, episodic memory, procedural memory, and the async
-reflection pipeline are explicit non-goals of slice 1 and are deferred
-to later slices that extend the runtime additively.
+The conversational MVP described below has not been implemented yet. The
+implementation order is documented in
+[`docs/adr/0003-walking-skeleton-first-plan-sequencing.md`](docs/adr/0003-walking-skeleton-first-plan-sequencing.md);
+the MVP design is in
+[`docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md`](docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md).
+
+---
+
+## MVP scope
+
+### In
+
+* Telegram bot via long polling
+* `POST /chat` and `POST /chat/stream` (SSE)
+* Google Gemini via `quarkus-langchain4j-ai-gemini`
+* In-memory bounded conversation history per session
+* Streaming token output, with throttled Telegram message edits
+* `/start`, `/reset`, `/status` Telegram commands
+* Structured logs with per-turn correlation id
+* Unit tests covering memory, dispatch, and the Telegram renderer
+
+### Explicitly deferred
+
+These belong to the destination architecture, not the MVP:
+
+* `AgentRuntime` orchestration core
+* Typed `Multi<AgentEvent>` runtime contract
+* `ModelGateway` provider abstraction
+* NVIDIA NIM provider, provider preference store, `/provider` command
+* Layered packages (`core/runtime/memory/provider/adapter`)
+* ArchUnit-enforced boundaries
+* Micrometer metrics, distributed tracing
+* Tool calling, planner/executor decomposition, reflection loops
+* Episodic memory, vector search, Redis/Postgres backends
+* Retry policies, multi-tenancy, webhook Telegram mode
+
+The point of the MVP is to validate the conversational loop end-to-end
+before reaching for any of the above.
+
+---
 
 ## Running
 
-Dev mode (live reload):
+The MVP is not implemented yet, so today these commands only run the
+generated skeleton.
 
-```shell
-./gradlew quarkusDev
+```bash
+./gradlew quarkusDev   # dev mode (live reload)
+./gradlew build        # build + tests
+./gradlew build -Dquarkus.native.enabled=true   # native image
 ```
 
-Build:
+Dev UI: <http://localhost:8080/q/dev/>.
 
-```shell
-./gradlew build
-```
+> When working through Claude Code, use the `quarkus-agent` MCP
+> (`quarkus_start`, `quarkus_status`, `quarkus_logs`) instead of running
+> `./gradlew quarkusDev` in the foreground — see
+> [`CLAUDE.md`](CLAUDE.md) and [ADR 0004](docs/adr/0004-claude-code-harness.md).
 
-Native build:
-
-```shell
-./gradlew build -Dquarkus.native.enabled=true
-```
-
-The Dev UI is available at <http://localhost:8080/q/dev/> while in dev
-mode.
+---
 
 ## Configuration
 
-Provider credentials and the Telegram bot token are read from the
-environment. See the design spec, §5 (`Configuration`), for the full
-property list. The minimum to run with one provider:
+Once the MVP lands, these environment variables enable each transport:
 
-```shell
+```bash
+# Gemini
 export GEMINI_API_KEY=...
-./gradlew quarkusDev
-```
 
-Telegram is disabled by default. Enable it with:
-
-```shell
+# Telegram (off by default)
 export QUARK_TELEGRAM_ENABLED=true
 export TELEGRAM_BOT_TOKEN=...
 ```
+
+---
+
+## Telegram commands (planned)
+
+| Command   | Behaviour                       |
+| --------- | ------------------------------- |
+| `/start`  | welcome message                 |
+| `/reset`  | clears conversation memory      |
+| `/status` | uptime + memory size            |
+
+`/provider` is intentionally not part of the MVP. It arrives with the
+second provider, alongside the runtime refactor.
+
+---
+
+## Repository layout
+
+```
+README.md            — this file
+MANIFESTO.md         — engineering philosophy
+ARCHITECTURE.md      — today's pipeline + destination shape
+CLAUDE.md            — operating rules for Claude Code sessions
+docs/
+├── adr/             — load-bearing architectural decisions
+├── progress.md      — task progress ledger
+├── superpowers/
+│   ├── specs/       — design specs (MVP design lives here)
+│   └── plans/       — incremental implementation plans
+└── vision/          — long-term direction narrative
+.claude/             — Claude Code harness (hooks, slash commands, settings)
+```
+
+---
+
+## Why "quark"
+
+The smallest things, composing into larger structures. Also a nod to
+Quarkus.
+
+---
+
+## Status
+
+The repository is in the MVP bootstrap phase. Versioning starts at
+`0.0.0` and bumps through [release-please](docs/adr/0005-release-please-automation.md)
+once feature commits land on `main`.

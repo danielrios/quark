@@ -6,7 +6,7 @@ output here converts the agent's claim into a reviewable artefact.
 
 ## Linked plan / spec
 
-<!-- e.g. docs/superpowers/plans/2026-05-25-plan-1-telegram-gemini-walking-skeleton.md, Phase N — Task M -->
+<!-- e.g. docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md, or a plan under docs/superpowers/plans/ once authored -->
 
 
 
