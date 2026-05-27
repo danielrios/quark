@@ -1,6 +1,7 @@
 plugins {
     java
     id("io.quarkus")
+    id("com.diffplug.spotless") version "7.0.4"
 }
 
 repositories {
@@ -23,7 +24,7 @@ dependencies {
 }
 
 group = "org.acme"
-version = "1.0.0-SNAPSHOT"
+version = "0.0.0" // x-release-please-version
 
 java {
     sourceCompatibility = JavaVersion.VERSION_25
@@ -33,4 +34,27 @@ java {
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
     options.compilerArgs.add("-parameters")
+}
+
+spotless {
+    java {
+        target("src/**/*.java")
+        // Heavy Java formatters (Google JavaFormat, Palantir) call into javac internals
+        // and break across JDK versions — on JDK 25 they throw NoSuchMethodError against
+        // com.sun.tools.javac.util.Log$DeferredDiagnosticHandler. Keeping only the
+        // string-level rules until a JDK-25-stable formatter ships.
+        // See docs/adr/0004-claude-code-harness.md "Revisit if".
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    kotlinGradle {
+        target("*.gradle.kts")
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    format("misc") {
+        target("*.md", ".gitignore")
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }
