@@ -1,7 +1,7 @@
 plugins {
     java
     id("io.quarkus")
-    id("com.diffplug.spotless") version "7.0.4"
+    id("com.diffplug.spotless") version "8.5.1"
 }
 
 repositories {
