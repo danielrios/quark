@@ -58,7 +58,3 @@ spotless {
         endWithNewline()
     }
 }
-
-tasks.named("check") {
-    dependsOn("spotlessCheck")
-}

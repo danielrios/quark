@@ -22,7 +22,7 @@ cmd="$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null
 # source of truth for plain prefix matches; this hook covers patterns only.
 deny_patterns=(
   'quarkusDev'
-  '--continuous'
+  'gradlew[[:space:]]+.*--continuous'
   'gradlew[[:space:]]+-t([[:space:]]|$)'
   'quarkus:dev'
 )

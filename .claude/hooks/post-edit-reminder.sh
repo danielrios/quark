@@ -9,12 +9,15 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 state_dir="${PROJECT_DIR}/.claude/state"
 payload="$(cat)"
 
-# Extract the edited file path. Prefer jq.
-if command -v jq >/dev/null 2>&1; then
-  file_path="$(printf '%s' "$payload" | jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' 2>/dev/null || true)"
-else
-  file_path="$(printf '%s' "$payload" | tr '\n' ' ' | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+# jq is required for reliable parsing — a sed fallback breaks on escaped
+# quotes and Unicode in paths. Mirror pre-bash-guard.sh: fail open with a
+# warning rather than risk a wrong stamp.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "post-edit-reminder.sh: jq not on PATH — skipping test-gate reminder (install jq to re-enable)." >&2
+  exit 0
 fi
+
+file_path="$(printf '%s' "$payload" | jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' 2>/dev/null || true)"
 
 case "$file_path" in
   *.java|*.kt|*.kts|*.gradle.kts|*.properties)
