@@ -1,12 +1,14 @@
 # Task Progress Ledger
 
-Mutable agent state. The plan checklist lives in
-[`docs/superpowers/plans/2026-05-25-plan-1-telegram-gemini-walking-skeleton.md`](./superpowers/plans/2026-05-25-plan-1-telegram-gemini-walking-skeleton.md);
-do not duplicate it here. This file holds only: current task pointer,
-session counter, last ~3 trajectory entries, and live stack traces.
+Mutable agent state. The MVP design lives in
+[`docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md`](./superpowers/specs/2026-05-25-agent-runtime-mvp.md);
+do not duplicate it here. Once a Plan 1 file exists under
+`docs/superpowers/plans/`, point at it instead. This file holds only:
+current task pointer, session counter, last ~3 trajectory entries, and
+live stack traces.
 
 ## Current Task
-- Plan 1 — Telegram + Gemini Walking Skeleton (next: Phase 1 — Task 1, deps + config).
+- Plan 1 — Telegram + Gemini walking skeleton — **plan file to be authored** against the MVP spec before Phase 1 starts.
 
 ## System State
 - Current Session Attempts: 0 / 3

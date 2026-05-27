@@ -4,150 +4,313 @@
 **Deciders:** Daniel + harness-engineering session
 **Context refs:** [`CLAUDE.md`](../../CLAUDE.md), [`.claude/`](../../.claude/)
 
+---
+
 ## Context
 
-`CLAUDE.md` defines rigid agent operating rules — WIP=1, baseline test before
-and after every change via the `quarkus-agent` MCP, no foreground
-`./gradlew quarkusDev`, escalate to the human after 3 consecutive identical
-test failures — but until now there was zero harness machinery to enforce
-or assist with them. Every routine `git status` or `./gradlew test` invocation
-prompted for permission. The `quarkus-agent` MCP, if absent, failed silently:
-tool calls just errored out without surfacing that the dev-mode/test gate was
-unreachable. Formatting and CI did not exist.
+`CLAUDE.md` defines strict operational rules for AI-assisted development:
 
-This left the rules as honor-system policy on the agent side and made onboarding
-a new contributor (human or AI) noisy and error-prone.
+* WIP = 1
+* baseline tests before and after every change
+* no foreground `./gradlew quarkusDev`
+* escalation after repeated failures
+* explicit progress tracking
+
+Until now, those rules existed only as documentation.
+
+There was no harness machinery to:
+
+* reduce repetitive permission prompts,
+* prevent dangerous commands,
+* surface missing MCP integrations,
+* standardise contributor workflows,
+* or provide lightweight automation around the development loop.
+
+This created several problems:
+
+* routine commands constantly prompted for approval,
+* missing MCP configuration failed silently,
+* onboarding a new session was noisy,
+* and operational rules depended entirely on discipline instead of tooling.
+
+The project needed a lightweight harness layer that improves ergonomics
+without turning the repository into a heavily managed environment.
+
+---
 
 ## Decision
 
-Add a project-level Claude Code harness under `.claude/` and a thin layer of
-build/CI tooling that backs CLAUDE.md with enforcement and ergonomics.
+Introduce a project-level Claude Code harness under `.claude/`,
+combined with minimal CI and formatting infrastructure.
 
-### Layout
+The harness exists to support the workflow described in `CLAUDE.md`,
+not replace developer judgement.
 
-```
+---
+
+## Harness Layout
+
+```text
 .claude/
-├── settings.json            # permissions allow/deny + hook wiring
+├── settings.json
 ├── hooks/
-│   ├── session-start.sh     # advisory: Java25 / gradlew / MCP detection
-│   ├── pre-bash-guard.sh    # hard-block foreground quarkusDev
-│   ├── post-edit-reminder.sh# advisory: remind to run baseline test
-│   └── stop-progress-check.sh# advisory: warn on uncommitted edits w/o docs/progress.md update
+│   ├── session-start.sh
+│   ├── pre-bash-guard.sh
+│   ├── post-edit-reminder.sh
+│   └── stop-progress-check.sh
 ├── commands/
-│   ├── baseline-test.md     # /baseline-test
-│   └── progress.md          # /progress <task>
-└── state/                   # gitignored — runtime stamps for hooks
+│   ├── baseline-test.md
+│   └── progress.md
+└── state/
 ```
 
-### Enforcement model — "block dangerous, warn on the rest"
+### Responsibilities
 
-| CLAUDE.md rule | Enforcement |
-|---|---|
-| No foreground `./gradlew quarkusDev` (§2 Non-Interactive) | **Hard block** via `permissions.deny` and `pre-bash-guard.sh`. Code 2 exit, stderr explains the MCP path. |
-| Baseline test before/after edits (§3) | **Advisory** — `post-edit-reminder.sh` prints a reminder after every Edit/Write. Test cannot be programmatically forced without the MCP being reachable. |
-| State rule (§2) — commit or `docs/progress.md` | **Advisory** — `stop-progress-check.sh` warns when edits happen with no `docs/progress.md` / commit update. Global stop-hook still enforces commit+push at session exit. |
-| WIP=1 (§2) | **Not automatable** — single-file constraint is intent, not syntax. |
-| 3-failure escalation (§4) | **Not automatable here** — depends on test-runner output that lives in the MCP. Future work. |
+| Path                           | Purpose                                            |
+| ------------------------------ | -------------------------------------------------- |
+| `settings.json`                | Shared permissions and hook wiring                 |
+| `hooks/session-start.sh`       | Detect environment gaps and print onboarding hints |
+| `hooks/pre-bash-guard.sh`      | Block dangerous foreground commands                |
+| `hooks/post-edit-reminder.sh`  | Remind contributors to run baseline tests          |
+| `hooks/stop-progress-check.sh` | Warn when edits exist without progress tracking    |
+| `commands/`                    | Reusable Claude Code slash-command documentation   |
+| `state/`                       | Gitignored runtime state for hooks                 |
 
-The asymmetry is deliberate: blocking foreground dev-mode prevents a class of
-session-killing bash invocations that have a clear, identifiable signature.
-The other rules are softer — over-enforcing them with mandatory hooks creates
-friction that the agent will route around (e.g. by batching edits to avoid
-reminders), which is worse than no enforcement.
+---
 
-### Permissions allowlist
+## Enforcement Strategy
 
-The allowlist pre-approves only:
-- read-only git (`status`, `diff`, `log`, `show`, `branch`, `fetch`),
-- non-dev-mode gradle (`test`, `check`, `compileJava`, `spotless*`, `build -x test`, `tasks`),
-- read-only inspection (`ls`, `find`, `rg`, `grep`),
-- the `quarkus-agent` MCP namespace (`mcp__quarkus-agent__*`),
-- read-only GitHub MCP calls.
+The harness intentionally distinguishes between:
 
-Anything that writes — `git commit`, `git push`, `git add`, edits to system
-config, gradle clean, etc. — still prompts. This is the floor, not the ceiling:
-session-level `settings.local.json` can opt in to more without changing the
-shared file.
+* **dangerous actions** → blocked,
+* **process discipline** → advisory only.
 
-### MCP registration is deferred
+### Hard Enforcement
 
-`quarkus-agent` MCP is referenced throughout `CLAUDE.md` but is not registered
-in this repo. There is no `.mcp.json`. Reasons:
+| Rule                                 | Mechanism                                |
+| ------------------------------------ | ---------------------------------------- |
+| No foreground `./gradlew quarkusDev` | `permissions.deny` + `pre-bash-guard.sh` |
 
-1. The MCP server's transport/binary is not yet specified by the project — it
-   may run via `stdio` from a local install, via `http` from a user-level
-   config, or be bundled into the Quarkus dev experience itself in a future
-   plan.
-2. Committing a half-correct `.mcp.json` would mask the gap rather than
-   surface it.
+Foreground dev-mode is considered uniquely dangerous because it can
+freeze or hijack the session. The signature is deterministic and easy
+to detect safely.
 
-Instead, `session-start.sh` detects whether `quarkus-agent` is mentioned in
-any of the standard merge locations (`.mcp.json`, project/user settings) and
-prints a loud warning when it is not. The first developer who actually wires
-the MCP can amend this ADR with the canonical configuration.
+The guard exits with a non-zero status and explains the intended MCP path.
 
-### Dev tooling
+---
 
-Spotless 7.0.4 wired into `check`, so `./gradlew test` flags formatting drift.
-Configured with `trimTrailingWhitespace()` and `endWithNewline()` for Java,
-Gradle Kotlin DSL, and markdown — pure string-level rules with no JDK
-coupling.
+### Advisory Enforcement
 
-**Heavy Java formatter intentionally deferred.** We tried Google Java Format
-1.22.0/1.24.0 and Palantir Java Format 2.50.0 in three CI rounds on Temurin
-25; all three threw `NoSuchMethodError` against
-`com.sun.tools.javac.util.Log$DeferredDiagnosticHandler.getDiagnostics()`.
-Both formatters call into javac internals as a parser, and JDK 25 changed
-that method's signature. Per CLAUDE.md §6 YAGNI: a heavy formatter on three
-skeleton files is not worth a CI workaround (e.g. running Spotless under
-a separate JDK 21 toolchain). Revisit once a JDK-25-stable version of either
-formatter ships.
+| Rule                              | Mechanism                 |
+| --------------------------------- | ------------------------- |
+| Baseline tests before/after edits | post-edit reminder        |
+| Keep progress tracked             | stop hook warning         |
+| Escalate after repeated failures  | documented process only   |
+| WIP = 1                           | social/process discipline |
 
-### CI
+These rules are intentionally not over-automated.
 
-A single `.github/workflows/ci.yml` runs `spotlessCheck` and `test` on
-Temurin 25 for every PR and push to `main`. No native-image build yet —
-that is plan-7 territory per ADR 0003.
+The harness philosophy is:
+
+> enforce catastrophic mistakes, guide workflow discipline.
+
+Over-aggressive enforcement would incentivise bypass behaviour and reduce
+the usefulness of the harness.
+
+---
+
+## Permissions Model
+
+The shared allowlist pre-approves only low-risk operations.
+
+### Allowed without prompts
+
+* read-only git:
+
+  * `git status`
+  * `git diff`
+  * `git log`
+  * `git show`
+  * `git branch`
+  * `git fetch`
+
+* safe Gradle operations:
+
+  * `test`
+  * `check`
+  * `compileJava`
+  * `spotless*`
+  * `build -x test`
+  * `tasks`
+
+* repository inspection:
+
+  * `ls`
+  * `find`
+  * `grep`
+  * `rg`
+
+* MCP namespaces:
+
+  * `mcp__quarkus-agent__*`
+
+### Still requires approval
+
+* `git add`
+* `git commit`
+* `git push`
+* `gradle clean`
+* system configuration edits
+* destructive filesystem operations
+
+The shared configuration intentionally stays conservative.
+
+Developers can locally extend permissions through:
+
+```text
+.claude/settings.local.json
+```
+
+without changing the repository-wide defaults.
+
+---
+
+## MCP Registration Policy
+
+The repository intentionally does **not** commit a `.mcp.json`.
+
+Reasoning:
+
+1. The transport strategy for `quarkus-agent` is not yet stable.
+2. A half-correct committed configuration is worse than no configuration.
+3. MCP setup may evolve into:
+
+  * local stdio,
+  * HTTP transport,
+  * or Quarkus-integrated tooling later.
+
+Instead, `session-start.sh` detects whether MCP configuration exists
+in any standard location and emits a visible warning if missing.
+
+This keeps the gap explicit instead of silently misconfigured.
+
+---
+
+## Formatting Strategy
+
+Spotless `7.0.4` is wired into the build.
+
+Current formatting rules are intentionally minimal:
+
+* trim trailing whitespace,
+* ensure newline at EOF.
+
+Applied to:
+
+* Java,
+* Gradle Kotlin DSL,
+* Markdown.
+
+### Heavy Java formatter intentionally deferred
+
+Google Java Format and Palantir Java Format were tested against
+Temurin JDK 25 and failed due to internal javac API incompatibilities.
+
+The project explicitly rejected:
+
+* JDK toolchain workarounds,
+* dual-JDK formatting pipelines,
+* or formatter-specific CI complexity
+
+during the bootstrap phase.
+
+The decision follows the project's broader philosophy:
+
+> avoid operational complexity before the codebase justifies it.
+
+---
+
+## CI
+
+A minimal GitHub Actions workflow runs:
+
+```text
+spotlessCheck
+test
+```
+
+on:
+
+* pull requests,
+* pushes to `main`.
+
+Environment:
+
+* Temurin 25
+
+Native-image builds are intentionally deferred until later plans.
+
+---
 
 ## Consequences
 
 ### Positive
-- Routine commands no longer prompt. Agent sessions feel quieter and faster.
-- The one truly dangerous bash invocation (`quarkusDev` in foreground) is now
-  prevented at the harness layer, not at the agent's discretion.
-- Onboarding a new session shows the current `docs/progress.md` task and surfaces
-  any setup gaps in the first 10 lines of output.
-- CI catches formatting drift before review.
-- `.claude/settings.json`, `hooks/`, and `commands/` are tracked in git, so
-  every contributor (human or AI) gets the same harness. `.claude/state/`
-  and `.claude/settings.local.json` are local-only.
+
+* Routine development sessions become quieter and faster.
+* Dangerous foreground dev-mode invocations are prevented automatically.
+* Contributors receive immediate visibility into missing setup.
+* CI catches formatting drift early.
+* The harness is versioned and shared across all contributors.
+* Workflow expectations become executable instead of purely documented.
 
 ### Negative
-- The allowlist is conservative. The agent will still prompt for many normal
-  operations (any `git` write, gradle clean, etc.). Tuning is expected.
-- Hook scripts are bash and depend on `grep`/`sed`/`date` being POSIX-ish.
-  Windows agents would need WSL or a rewrite. Acceptable for this project.
-- The advisory hooks (post-edit, stop) print to stderr, which mingles with
-  real tool errors. Tolerable at current volume; revisit if it becomes noisy.
 
-### Mitigations
-- `.claude/settings.local.json` lets each developer opt into more
-  permissions for their own sessions without changing shared config.
-- The hooks are tiny (~30 lines each) and easy to disable individually by
-  removing their entry from `settings.json`.
+* The permission model remains intentionally conservative.
+* Advisory hooks can produce noisy stderr output.
+* The hooks currently assume POSIX tooling.
+* Some workflow discipline still depends on human judgement.
+
+---
+
+## Mitigations
+
+* Local overrides exist through `settings.local.json`.
+* Hooks are intentionally tiny and individually removable.
+* Advisory-only hooks reduce workflow hostility.
+* Shared harness evolution happens through repository review instead of
+  local drift.
+
+---
+
+## Philosophy
+
+The harness is intentionally lightweight.
+
+It is not trying to become:
+
+* a build system,
+* a policy engine,
+* or an AI sandbox runtime.
+
+Its role is narrower:
+
+> reduce friction, prevent obvious failure modes, and reinforce the
+> engineering workflow already documented in the project.
+
+The project prioritises:
+
+* visibility,
+* operational clarity,
+* and low ceremony
+
+over maximal automation.
+
+---
 
 ## Revisit if
 
-- The `quarkus-agent` MCP transport is decided — register it in `.mcp.json`
-  and update `session-start.sh` to do a real reachability check.
-- A second formatter or linter becomes worthwhile (e.g. ArchUnit enforcement
-  in plan 7 — that runs as a test, not via Spotless).
-- A JDK-25-stable release of Google Java Format or Palantir Java Format ships.
-  Add it back to the `spotless { java { ... } }` block in `build.gradle.kts`
-  and run `./gradlew spotlessApply` once to bring the existing source in line.
-  The Spotless config already targets `src/**/*.java` — only the formatter
-  step itself is missing.
-- Hook noise becomes a problem. Consider moving from per-event stderr prints
-  to a single `.claude/state/session.log` that the agent can `Read` on demand.
-- The allowlist needs expansion as the project grows. Add new patterns here,
-  not in `settings.local.json` — shared harness should evolve with the team.
+* The `quarkus-agent` MCP transport becomes standardised.
+* Hook noise becomes disruptive.
+* A stable JDK-25-compatible Java formatter ships.
+* The project gains more contributors and stricter automation becomes valuable.
+* CI expands into integration, native-image, or deployment validation.
