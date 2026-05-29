@@ -61,13 +61,33 @@ before reaching for any of the above.
 
 ---
 
-## Running
+## Run the bot
 
-The MVP is not implemented yet, so today these commands only run the
-generated skeleton.
+Set the required environment variables, then start dev mode via the
+`quarkus-agent` MCP:
 
 ```bash
-./gradlew quarkusDev   # dev mode (live reload)
+export GEMINI_API_KEY=your-gemini-api-key
+export TELEGRAM_BOT_TOKEN=your-token-from-botfather
+```
+
+Start dev mode (Claude Code / MCP):
+
+```
+quarkus_start   # via quarkus-agent MCP — never run ./gradlew quarkusDev directly
+```
+
+Once running, message your bot in Telegram and it will reply using Gemini.
+
+**Tests require no secrets.** The `%test` profile sets
+`quark.telegram.enabled=false` and a dummy Gemini key, so `./gradlew test`
+passes without any credentials.
+
+---
+
+## Running (CLI)
+
+```bash
 ./gradlew build        # build + tests
 ./gradlew build -Dquarkus.native.enabled=true   # native image
 ```
