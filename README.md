@@ -16,15 +16,12 @@ the current shape and the destination shape.
 
 ## What's actually here today
 
-A bootstrapped Quarkus 3.35.4 / Java 25 / Gradle project with
-`quarkus-langchain4j-core` on the classpath and a generated
-`GreetingResource`.
+A Quarkus 3.35.4 / Java 25 / Gradle project with a running Telegram bot:
+message it and Gemini replies (Plan 1 walking skeleton). No memory, no
+commands, no streaming yet — those arrive in Plans 2–3.
 
-The conversational MVP described below has not been implemented yet. The
-implementation order is documented in
-[`docs/adr/0003-walking-skeleton-first-plan-sequencing.md`](docs/adr/0003-walking-skeleton-first-plan-sequencing.md);
-the MVP design is in
-[`docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md`](docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md).
+Implementation order: [`docs/adr/0003-walking-skeleton-first-plan-sequencing.md`](docs/adr/0003-walking-skeleton-first-plan-sequencing.md).
+MVP design: [`docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md`](docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md).
 
 ---
 
