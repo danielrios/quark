@@ -16,15 +16,12 @@ the current shape and the destination shape.
 
 ## What's actually here today
 
-A bootstrapped Quarkus 3.35.4 / Java 25 / Gradle project with
-`quarkus-langchain4j-core` on the classpath and a generated
-`GreetingResource`.
+A Quarkus 3.35.4 / Java 25 / Gradle project with a running Telegram bot:
+message it and Gemini replies (Plan 1 walking skeleton). No memory, no
+commands, no streaming yet — those arrive in Plans 2–3.
 
-The conversational MVP described below has not been implemented yet. The
-implementation order is documented in
-[`docs/adr/0003-walking-skeleton-first-plan-sequencing.md`](docs/adr/0003-walking-skeleton-first-plan-sequencing.md);
-the MVP design is in
-[`docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md`](docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md).
+Implementation order: [`docs/adr/0003-walking-skeleton-first-plan-sequencing.md`](docs/adr/0003-walking-skeleton-first-plan-sequencing.md).
+MVP design: [`docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md`](docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md).
 
 ---
 
@@ -32,14 +29,17 @@ the MVP design is in
 
 ### In
 
+Items not yet implemented are marked _(planned)_; see
+[`What's actually here today`](#whats-actually-here-today) for the current state.
+
 * Telegram bot via long polling
-* `POST /chat` and `POST /chat/stream` (SSE)
 * Google Gemini via `quarkus-langchain4j-ai-gemini`
-* In-memory bounded conversation history per session
-* Streaming token output, with throttled Telegram message edits
-* `/start`, `/reset`, `/status` Telegram commands
-* Structured logs with per-turn correlation id
-* Unit tests covering memory, dispatch, and the Telegram renderer
+* `POST /chat` and `POST /chat/stream` (SSE) _(planned)_
+* In-memory bounded conversation history per session _(planned)_
+* Streaming token output, with throttled Telegram message edits _(planned)_
+* `/start`, `/reset`, `/status` Telegram commands _(planned)_
+* Structured logs with per-turn correlation id _(planned)_
+* Unit tests covering memory, dispatch, and the Telegram renderer _(planned)_
 
 ### Explicitly deferred
 
@@ -61,13 +61,33 @@ before reaching for any of the above.
 
 ---
 
-## Running
+## Run the bot
 
-The MVP is not implemented yet, so today these commands only run the
-generated skeleton.
+Set the required environment variables, then start dev mode via the
+`quarkus-agent` MCP:
 
 ```bash
-./gradlew quarkusDev   # dev mode (live reload)
+export GEMINI_API_KEY=your-gemini-api-key
+export TELEGRAM_BOT_TOKEN=your-token-from-botfather
+```
+
+Start dev mode (Claude Code / MCP):
+
+```
+quarkus_start   # via quarkus-agent MCP — never run ./gradlew quarkusDev directly
+```
+
+Once running, message your bot in Telegram and it will reply using Gemini.
+
+**Tests require no secrets.** The `%test` profile sets
+`quark.telegram.enabled=false` and a dummy Gemini key, so `./gradlew test`
+passes without any credentials.
+
+---
+
+## Running (CLI)
+
+```bash
 ./gradlew build        # build + tests
 ./gradlew build -Dquarkus.native.enabled=true   # native image
 ```
