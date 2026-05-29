@@ -53,4 +53,23 @@ class TelegramMessagesTest {
     void nextOffsetUnchangedForEmptyBatch() {
         assertEquals(5, TelegramMessages.nextOffset(5, List.of()));
     }
+
+    @Test
+    void clampLeavesShortTextUnchanged() {
+        assertEquals("hello", TelegramMessages.clampToTelegramLimit("hello"));
+    }
+
+    @Test
+    void clampLeavesTextAtLimitUnchanged() {
+        String atLimit = "x".repeat(TelegramMessages.MAX_MESSAGE_LENGTH);
+        assertEquals(atLimit, TelegramMessages.clampToTelegramLimit(atLimit));
+    }
+
+    @Test
+    void clampTruncatesOverlongTextToLimitWithEllipsis() {
+        String overlong = "x".repeat(TelegramMessages.MAX_MESSAGE_LENGTH + 500);
+        String clamped = TelegramMessages.clampToTelegramLimit(overlong);
+        assertEquals(TelegramMessages.MAX_MESSAGE_LENGTH, clamped.length());
+        assertTrue(clamped.endsWith("…"));
+    }
 }

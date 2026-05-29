@@ -29,14 +29,17 @@ MVP design: [`docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md`](docs/supe
 
 ### In
 
+Items not yet implemented are marked _(planned)_; see
+[`What's actually here today`](#whats-actually-here-today) for the current state.
+
 * Telegram bot via long polling
-* `POST /chat` and `POST /chat/stream` (SSE)
 * Google Gemini via `quarkus-langchain4j-ai-gemini`
-* In-memory bounded conversation history per session
-* Streaming token output, with throttled Telegram message edits
-* `/start`, `/reset`, `/status` Telegram commands
-* Structured logs with per-turn correlation id
-* Unit tests covering memory, dispatch, and the Telegram renderer
+* `POST /chat` and `POST /chat/stream` (SSE) _(planned)_
+* In-memory bounded conversation history per session _(planned)_
+* Streaming token output, with throttled Telegram message edits _(planned)_
+* `/start`, `/reset`, `/status` Telegram commands _(planned)_
+* Structured logs with per-turn correlation id _(planned)_
+* Unit tests covering memory, dispatch, and the Telegram renderer _(planned)_
 
 ### Explicitly deferred
 

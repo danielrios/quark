@@ -19,6 +19,10 @@ live stack traces.
 ## Active Trajectory Logs / Error Traces
 <!-- Append the most recent entry at the top. Trim older entries on each session — they live in the git log and PR descriptions, not here. -->
 
+### 2026-05-29 17:03Z — PR #11 review fix: clamp Telegram replies to 4096-char limit (pure fn + TDD) and mark planned README scope items; ./gradlew test + spotlessCheck green (10 tests)
+- branch: claude/plan-1-telegram-gemini-skeleton
+- status: Done — addressed the one Important finding from PR #11 review (silent drop of >4096-char Gemini replies). Added pure `TelegramMessages.clampToTelegramLimit` (TDD: 3 new tests), wired into `TelegramBotRunner.handle()`; marked unimplemented README "MVP scope / In" items as _(planned)_. Next: commit + push so PR #11 updates.
+
 ### 2026-05-28 — Plan 1 complete (branch `claude/plan-1-telegram-gemini-skeleton`)
 - All tasks 0–5 executed. 7 automated tests pass (BUILD SUCCESSFUL).
 - Smoke test: Telegram → poller → Gemini reached and authenticated. Free-tier quota exhausted on key provided; architecture is verified end-to-end.
@@ -32,8 +36,3 @@ live stack traces.
 - **What was tried:** (1) stop + start with default port, ×2; (2) stop + start with explicit `httpPort: 8081` to avoid any conflict.
 - **Gate result:** CANNOT CONFIRM — test runner unreachable. §4 stop condition reached.
 - **Needed from human:** confirm whether IntelliJ / another process is interfering with the MCP's port detection, or whether the quarkus-agent MCP server needs to be restarted / reconfigured.
-
-### 2026-05-26 — Harness engineering improvements (branch `claude/harness-engineering-improvements-opjum`)
-- Built project-level `.claude/` harness, Spotless formatter, and CI workflow per `docs/adr/0004-claude-code-harness.md`.
-- Follow-up commit landed P0/P1 advisor fixes: PR template, Dependabot, CI concurrency + JUnit report + dependency review, hook fixes (jq parsing, source-only post-edit reminder, commit-time stop-check), CLAUDE.md §6 engineering principles, moved `PROGRESS.md` → `docs/progress.md`.
-- **Outstanding**: CLAUDE.md §3 baseline test gate could NOT be exercised in this session. `quarkus-agent` MCP unwired (SessionStart hook surfaces this loudly, as designed); `./gradlew test` fallback fails because the container is Temurin 21 while `build.gradle.kts` requires Java 25. CI runs on Temurin 25 and will exercise the test path on every PR.

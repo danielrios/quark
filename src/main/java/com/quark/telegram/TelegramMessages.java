@@ -8,6 +8,9 @@ public final class TelegramMessages {
 
     private TelegramMessages() {}
 
+    /** Telegram rejects {@code sendMessage} payloads whose text exceeds 4096 characters. */
+    public static final int MAX_MESSAGE_LENGTH = 4096;
+
     public record GetUpdatesResponse(boolean ok, List<TelegramUpdate> result) {}
 
     public record TelegramUpdate(@JsonProperty("update_id") long updateId, Message message) {}
@@ -26,6 +29,18 @@ public final class TelegramMessages {
             return Optional.empty();
         }
         return Optional.of(new IncomingText(m.chat().id(), m.text()));
+    }
+
+    /**
+     * Clamps reply text to Telegram's per-message limit. Over-limit text is truncated and marked
+     * with a trailing ellipsis so the user sees a (cut) answer rather than nothing. Full chunking
+     * of long replies is deferred to Plan 3.
+     */
+    public static String clampToTelegramLimit(String text) {
+        if (text.length() <= MAX_MESSAGE_LENGTH) {
+            return text;
+        }
+        return text.substring(0, MAX_MESSAGE_LENGTH - 1) + "…";
     }
 
     public static long nextOffset(long current, List<TelegramUpdate> updates) {

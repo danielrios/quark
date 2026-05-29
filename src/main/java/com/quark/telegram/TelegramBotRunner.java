@@ -88,7 +88,8 @@ public class TelegramBotRunner {
                 Log.error("Gemini call failed", e);
                 reply = "Something went wrong.";
             }
-            api.sendMessage(new SendMessage(incoming.chatId(), reply));
+            api.sendMessage(
+                    new SendMessage(incoming.chatId(), TelegramMessages.clampToTelegramLimit(reply)));
         } catch (Exception e) {
             Log.error("Failed to handle update " + update.updateId(), e);
         } finally {
