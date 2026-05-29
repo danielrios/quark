@@ -8,8 +8,8 @@ current task pointer, session counter, last ~3 trajectory entries, and
 live stack traces.
 
 ## Current Task
-- Plan 1 — Telegram + Gemini walking skeleton — **DONE, merged to `main`** (PR #11 @ merge `8dc5c84`; release-please cut 0.2.0). Live end-to-end verified: Telegram long-poll → Gemini → reply.
-- **Next: Plan 2 — in-process working memory + `/reset` command** (ADR 0003 scope table; no abstractions, memory on the dispatcher). Plan file not yet authored — write it via writing-plans before executing.
+- Plan 2 — in-process working memory + `/reset` — **DONE** (commits `18bd893`–`8e8f5e8`, branch `worktree-plan-2-working-memory-reset`). Per-session memory via `@MemoryId`; `/reset` clears session via `ChatMemoryStore.deleteMessages`. 21 tests, zero failures.
+- **Next: Plan 3 — Telegram streaming via throttled message edits** (ADR 0003); plan file not yet authored.
 
 ## System State
 - Current Session Attempts: 0 / 3
@@ -19,6 +19,12 @@ live stack traces.
 
 ## Active Trajectory Logs / Error Traces
 <!-- Append the most recent entry at the top. Trim older entries on each session — they live in the git log and PR descriptions, not here. -->
+
+### 2026-05-29 — Plan 2 complete (branch `worktree-plan-2-working-memory-reset`)
+- **Shipped:** per-session conversation memory via `@MemoryId String sessionId` on `Assistant.chat()` — LangChain4j's built-in `ChatMemoryProvider` supplies a bounded `MessageWindowChatMemory` per session over the default in-memory store, zero new classes. `/reset` wired in `TelegramBotRunner.dispatch()` via `ChatMemoryStore.deleteMessages(sessionId)`, returns "Memory cleared. Starting fresh."
+- **Spec §6.2 deviation:** plan used LangChain4j built-in memory instead of the spec's suggested hand-rolled `ChatMemory`/`Map` approach. Rationale: strictly less code, idiomatic Quarkus, within ADR 0003's no-abstractions envelope, and the spec hedged its shape ("suggested structure"). Zero bespoke storage classes introduced.
+- **Task 4 dev-mode verification:** deferred — MCP `quarkus_start` stuck in "starting" state with empty log output after ~5 minutes; no crash, no error. Automated tests cover all functional assertions; the live Telegram smoke test is blocked on MCP dev-mode start reliability, not on correctness.
+- **Test gate:** `./gradlew test` → BUILD SUCCESSFUL, 21 tests, zero failures (10 `TelegramCommandsTest` + 1 `AssistantMemoryWiringTest` + 2 `TelegramBotRunnerResetTest` + 8 existing).
 
 ### 2026-05-29 — Plan 1 closed out: PR #11 merged to `main`
 - PR #11 merged (`8dc5c84`); release-please cut 0.2.0. Two post-review fixes landed: clamp Telegram replies to 4096 chars (`TelegramMessages.clampToTelegramLimit`, +3 TDD tests) and `gemini-2.0-flash` → `gemini-2.5-flash` (old model 404s for newly issued API keys).
