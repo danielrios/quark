@@ -95,6 +95,7 @@ public class TelegramBotRunner {
     String dispatch(String sessionId, String text) {
         switch (TelegramCommands.parse(text)) {
             case RESET:
+                // Wired in Task 3.
                 return chat(sessionId, text);
             case CHAT:
             default:
