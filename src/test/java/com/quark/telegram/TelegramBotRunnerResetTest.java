@@ -8,6 +8,7 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
@@ -18,6 +19,13 @@ class TelegramBotRunnerResetTest {
 
     @Inject
     ChatMemoryStore store;
+
+    @AfterEach
+    void cleanStore() {
+        store.deleteMessages("9991");
+        store.deleteMessages("1001");
+        store.deleteMessages("1002");
+    }
 
     @Test
     void resetClearsSessionMemoryAndConfirms() {

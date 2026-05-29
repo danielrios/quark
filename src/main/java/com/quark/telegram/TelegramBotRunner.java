@@ -12,6 +12,7 @@ import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.inject.Inject;
 import java.util.List;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -28,7 +29,7 @@ public class TelegramBotRunner {
     Assistant assistant;
 
     @Inject
-    dev.langchain4j.store.memory.chat.ChatMemoryStore chatMemoryStore;
+    ChatMemoryStore chatMemoryStore;
 
     @ConfigProperty(name = "quark.telegram.enabled")
     boolean enabled;
