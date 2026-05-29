@@ -27,6 +27,9 @@ public class TelegramBotRunner {
     @Inject
     Assistant assistant;
 
+    @Inject
+    dev.langchain4j.store.memory.chat.ChatMemoryStore chatMemoryStore;
+
     @ConfigProperty(name = "quark.telegram.enabled")
     boolean enabled;
 
@@ -95,8 +98,8 @@ public class TelegramBotRunner {
     String dispatch(String sessionId, String text) {
         switch (TelegramCommands.parse(text)) {
             case RESET:
-                // Wired in Task 3.
-                return chat(sessionId, text);
+                chatMemoryStore.deleteMessages(sessionId);
+                return "Memory cleared. Starting fresh.";
             case CHAT:
             default:
                 return chat(sessionId, text);
