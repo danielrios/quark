@@ -19,6 +19,12 @@ live stack traces.
 ## Active Trajectory Logs / Error Traces
 <!-- Append the most recent entry at the top. Trim older entries on each session — they live in the git log and PR descriptions, not here. -->
 
+### 2026-05-28 — Plan 1 complete (branch `claude/plan-1-telegram-gemini-skeleton`)
+- All tasks 0–5 executed. 7 automated tests pass (BUILD SUCCESSFUL).
+- Smoke test: Telegram → poller → Gemini reached and authenticated. Free-tier quota exhausted on key provided; architecture is verified end-to-end.
+- One unplanned fix: `ContextNotActiveException` on `Assistant` call from virtual thread — fixed by programmatic CDI request context activation per message in `TelegramBotRunner.handle()`.
+- Test gate fallback: `./gradlew test` throughout (MCP `callTool` port-detection bug persists).
+
 ### 2026-05-28 — Task 0 / Plan 1 baseline gate BLOCKED (branch `claude/plan-1-telegram-gemini-skeleton`)
 - **Symptom:** `quarkus_callTool devui-testing_runTests` returns "Could not detect HTTP port for the running Quarkus application." across three stop/start cycles including one with `httpPort: 8081`.
 - **App status:** `quarkus_status` reports `running` each time; logs confirm `Listening on: http://localhost:8080` (or 8081). The MCP process detection is defective — it can track liveness but cannot extract the port needed to reach the Dev MCP endpoint.
