@@ -13,6 +13,8 @@ live stack traces.
 ## System State
 - Current Session Attempts: 0 / 3
 - Git Branch: see `git branch --show-current`
+- **Test gate fallback active:** `quarkus_callTool devui-testing_runTests` cannot detect HTTP port (persistent MCP bug across all stop/start cycles). Using `./gradlew test` as gate — harness pre-approved, Java 25 confirmed available.
+- **Pre-state baseline (Task 0):** `./gradlew test` → BUILD SUCCESSFUL, zero failures, zero errors (`GreetingResourceTest` passes).
 
 ## Active Trajectory Logs / Error Traces
 <!-- Append the most recent entry at the top. Trim older entries on each session — they live in the git log and PR descriptions, not here. -->
