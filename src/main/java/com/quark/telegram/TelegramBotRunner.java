@@ -81,19 +81,33 @@ public class TelegramBotRunner {
             if (incoming == null) {
                 return;
             }
-            String reply;
-            try {
-                reply = assistant.chat(incoming.text());
-            } catch (Exception e) {
-                Log.error("Gemini call failed", e);
-                reply = "Something went wrong.";
-            }
+            String sessionId = String.valueOf(incoming.chatId());
+            String reply = dispatch(sessionId, incoming.text());
             api.sendMessage(
                     new SendMessage(incoming.chatId(), TelegramMessages.clampToTelegramLimit(reply)));
         } catch (Exception e) {
             Log.error("Failed to handle update " + update.updateId(), e);
         } finally {
             requestContext.terminate();
+        }
+    }
+
+    String dispatch(String sessionId, String text) {
+        switch (TelegramCommands.parse(text)) {
+            case RESET:
+                return chat(sessionId, text);
+            case CHAT:
+            default:
+                return chat(sessionId, text);
+        }
+    }
+
+    private String chat(String sessionId, String userMessage) {
+        try {
+            return assistant.chat(sessionId, userMessage);
+        } catch (Exception e) {
+            Log.error("Gemini call failed", e);
+            return "Something went wrong.";
         }
     }
 
