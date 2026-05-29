@@ -5,6 +5,8 @@ import com.quark.telegram.TelegramMessages.GetUpdatesResponse;
 import com.quark.telegram.TelegramMessages.IncomingText;
 import com.quark.telegram.TelegramMessages.SendMessage;
 import com.quark.telegram.TelegramMessages.TelegramUpdate;
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ManagedContext;
 import io.quarkus.logging.Log;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
@@ -72,6 +74,8 @@ public class TelegramBotRunner {
     }
 
     private void handle(TelegramUpdate update) {
+        ManagedContext requestContext = Arc.container().requestContext();
+        requestContext.activate();
         try {
             IncomingText incoming = TelegramMessages.extractText(update).orElse(null);
             if (incoming == null) {
@@ -87,6 +91,8 @@ public class TelegramBotRunner {
             api.sendMessage(new SendMessage(incoming.chatId(), reply));
         } catch (Exception e) {
             Log.error("Failed to handle update " + update.updateId(), e);
+        } finally {
+            requestContext.terminate();
         }
     }
 
