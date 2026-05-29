@@ -14,10 +14,10 @@ val quarkusPlatformArtifactId: String by project
 val quarkusPlatformVersion: String by project
 
 dependencies {
-    implementation("io.quarkiverse.langchain4j:quarkus-langchain4j-core")
-    implementation("io.quarkiverse.langchain4j:quarkus-langchain4j-ai-gemini")
     implementation(enforcedPlatform("${quarkusPlatformGroupId}:quarkus-langchain4j-bom:${quarkusPlatformVersion}"))
     implementation(enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}"))
+    implementation("io.quarkiverse.langchain4j:quarkus-langchain4j-core")
+    implementation("io.quarkiverse.langchain4j:quarkus-langchain4j-ai-gemini")
     implementation("io.quarkus:quarkus-arc")
     implementation("io.quarkus:quarkus-rest")
     implementation("io.quarkus:quarkus-rest-client-jackson")
