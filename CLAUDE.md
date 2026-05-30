@@ -128,3 +128,10 @@ are binding for any lifecycle-bearing change.
   only from an integration test that drives the real boundary, or from a live
   smoke; state which in `docs/progress.md`. Never write "live-confirmed" off a
   green suite alone.
+
+**Enforcement.** The deletion rule is backed by `.claude/hooks/pre-delete-guard.sh`
+(PreToolUse on Bash): it emits this §8 reminder when an `rm` / `git rm` targets a
+lifecycle-bearing `src/main/**.java` file (one carrying a CDI scope, `@Produces`,
+`@PreDestroy`, `@Observes`, or `ChatMemory*` / `*Store`). Advisory only — it warns, it
+does not block. The deterministic backstop is the CI e2e test
+(`TelegramConversationMemoryTest` in `ci.yml`): break the scope and it goes red.
