@@ -8,7 +8,7 @@ current task pointer, session counter, last ~3 trajectory entries, and
 live stack traces.
 
 ## Current Task
-- Plan 2 — in-process working memory + `/reset` — **DONE** (commits `18bd893`–`8e8f5e8`, branch `worktree-plan-2-working-memory-reset`). Per-session memory via `@MemoryId`; `/reset` clears session via `ChatMemoryStore.deleteMessages`. 21 tests, zero failures.
+- Plan 2 — in-process working memory + `/reset` — **DONE** (commits `18bd893`–`8e8f5e8`, branch `worktree-plan-2-working-memory-reset`). Per-session memory via `@MemoryId` on an `@ApplicationScoped` `Assistant` (see [ADR 0006](adr/0006-application-scoped-ai-service-for-memory.md)); `/reset` clears session via `ChatMemoryStore.deleteMessages`. 26 tests, zero failures.
 - **Next: Plan 3 — Telegram streaming via throttled message edits** (ADR 0003); plan file not yet authored.
 
 ## System State
@@ -20,11 +20,18 @@ live stack traces.
 ## Active Trajectory Logs / Error Traces
 <!-- Append the most recent entry at the top. Trim older entries on each session — they live in the git log and PR descriptions, not here. -->
 
+### 2026-05-30 — Memory root-caused, refactored to the minimal correct fix (systematic debugging)
+- **Resolved** the prior session's open follow-up. Root cause, confirmed in `quarkus-langchain4j-core:1.9.2` bytecode **and** the official docs: `@RegisterAiService` defaults to `@RequestScoped`; `TelegramBotRunner.handle()` terminates a request context per update, firing the generated bean's `@PreDestroy` → `QuarkusAiServiceContext.close()` → `ChatMemoryService.clearAll()` → `ChatMemory.clear()` → `ChatMemoryStore.deleteMessages(sessionId)`. The session is **wiped from the store at the end of every update**, regardless of store implementation.
+- **Load-bearing fix = `@ApplicationScoped` on `Assistant`** (not the custom store). Proven by an end-to-end test (`TelegramConversationMemoryTest`: fake `ChatModel` via `QuarkusMock.installMockForType`, two turns across separate request contexts) run as a one-variable matrix: **B** = `@ApplicationScoped` + default store → PASS; **D** = default `@RequestScoped` + default store → FAIL (turn 2 loses turn 1). B vs D isolates scope; A vs B isolates store.
+- **Refactor (better than the original fix):** deleted `AppScopedChatMemoryStore` (dead weight — a duplicate of the extension's `InMemoryChatMemoryStore`, wiped by `deleteMessages` just the same); kept `@ApplicationScoped Assistant` + the default store. Deleted `ChatMemoryPersistenceTest` (it passed even when end-to-end memory was broken → false confidence). Recorded the decision in [ADR 0006](adr/0006-application-scoped-ai-service-for-memory.md). Net vs `76dfeaf`: one fewer class, a real e2e regression guard, scope documented inline so it is not "cleaned up" again.
+- **Test gate:** `./gradlew test` → BUILD SUCCESSFUL, 26 tests, zero failures (10 `TelegramCommandsTest` + 1 `AssistantMemoryWiringTest` + 2 `TelegramBotRunnerResetTest` + 3 `TelegramConversationMemoryTest` + 10 existing).
+- **Live verification:** the **shipped** config **B** (custom store deleted, `@ApplicationScoped Assistant` + default store) was live-confirmed by Daniel on 2026-05-30 — two-turn memory persists and `/reset` clears, end-to-end through real Telegram + Gemini. Matches the e2e test prediction.
+
 ### 2026-05-29 — Plan 2 complete (branch `worktree-plan-2-working-memory-reset`)
 - **Shipped:** per-session conversation memory via `@MemoryId String sessionId` on `Assistant.chat()` — LangChain4j's built-in `ChatMemoryProvider` supplies a bounded `MessageWindowChatMemory` per session over the default in-memory store, zero new classes. `/reset` wired in `TelegramBotRunner.dispatch()` via `ChatMemoryStore.deleteMessages(sessionId)`, returns "Memory cleared. Starting fresh."
 - **Spec §6.2 deviation:** plan used LangChain4j built-in memory instead of the spec's suggested hand-rolled `ChatMemory`/`Map` approach. Rationale: strictly less code, idiomatic Quarkus, within ADR 0003's no-abstractions envelope, and the spec hedged its shape ("suggested structure"). Zero bespoke storage classes introduced.
 - **Task 4 dev-mode verification:** deferred — MCP `quarkus_start` stuck in "starting" state with empty log output after ~5 minutes; no crash, no error. Automated tests cover all functional assertions; the live Telegram smoke test is blocked on MCP dev-mode start reliability, not on correctness.
-- **Test gate:** `./gradlew test` → BUILD SUCCESSFUL, 21 tests, zero failures (10 `TelegramCommandsTest` + 1 `AssistantMemoryWiringTest` + 2 `TelegramBotRunnerResetTest` + 8 existing).
+- **Test gate:** `./gradlew test` → BUILD SUCCESSFUL, 24 tests, zero failures (10 `TelegramCommandsTest` + 1 `AssistantMemoryWiringTest` + 2 `TelegramBotRunnerResetTest` + 1 `ChatMemoryPersistenceTest` + 10 existing).
 
 ### 2026-05-29 — Plan 1 closed out: PR #11 merged to `main`
 - PR #11 merged (`8dc5c84`); release-please cut 0.2.0. Two post-review fixes landed: clamp Telegram replies to 4096 chars (`TelegramMessages.clampToTelegramLimit`, +3 TDD tests) and `gemini-2.0-flash` → `gemini-2.5-flash` (old model 404s for newly issued API keys).

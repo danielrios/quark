@@ -27,3 +27,4 @@ zero-padded sequence number starting at `0001`. Do not reuse numbers.
 | [0003](0003-walking-skeleton-first-plan-sequencing.md) | Walking-skeleton-first plan sequencing | Accepted |
 | [0004](0004-claude-code-harness.md) | Claude Code harness configuration | Accepted |
 | [0005](0005-release-please-automation.md) | Release automation with release-please | Accepted |
+| [0006](0006-application-scoped-ai-service-for-memory.md) | `@ApplicationScoped` AI service for cross-request conversation memory | Accepted |
