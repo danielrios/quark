@@ -54,6 +54,7 @@ Pre-approved (no prompt):
 - Read-only git: `status`, `diff`, `log`, `show`, `branch`, `fetch`.
 - Non-dev-mode Gradle: `test`, `check`, `compileJava`, `spotless*`, `build -x test`, `tasks`.
 - The `mcp__quarkus-agent__*` namespace.
+- The `mcp__context7__*` namespace and the `quarkus-agent` doc tools — framework/library documentation lookup. Use these to verify documented behavior before decompiling jars (see §8).
 
 Still prompts:
 
@@ -78,7 +79,7 @@ Full rationale: [ADR 0004](./docs/adr/0004-claude-code-harness.md).
 
 - **Least power (agent layer).** When *you, the agent*, are solving a deterministic problem during development, choose the least powerful tool that works: a loop before regex, regex before a parser, a parser before an LLM call. This constrains *agent reasoning*, not the product — `langchain4j` and `@RegisterAiService` remain first-class inside shipped code.
 - **YAGNI / KISS.** Implement the simplest code that solves today's task. No abstract factories, SPI seams, or layering "in case." Abstractions are introduced on the schedule in [ADR 0003](./docs/adr/0003-walking-skeleton-first-plan-sequencing.md); do not pre-empt it.
-- **No guessing.** You may not declare a change correct based on code reading alone. The MCP test gate in §3 is the only authoritative answer — not `./gradlew test`, not `npm test`, not "looks right."
+- **No guessing.** You may not declare a change correct based on code reading alone. The MCP test gate in §3 is the only authoritative answer — not `./gradlew test`, not `npm test`, not "looks right." Caveat (§8): a green gate proves only what the tests *exercise*; lifecycle and cross-request persistence behavior is not certified until a test drives the real scope boundary, or a live smoke confirms it.
 - **Architecture decisions go somewhere.** Either an ADR in `docs/adr/`, a `docs/progress.md` note, or the PR body. Never silenced; never narrated only in chat.
 - **Output discipline.** No conversational filler, no restating the request, no pleasantries. Terse and concrete.
 
@@ -92,3 +93,45 @@ landing in Plans 1–3, shape every file so the refactor phase in ADR 0003
 (Plan 4) can extract those seams cleanly from working code. If you find
 yourself wanting to design around the absent abstraction before code
 exists, that is a signal to re-read ADR 0003 first.
+
+## 8. Lifecycle changes & deletion discipline (learned from PR #14)
+
+CDI scopes and beans, producers, `ChatMemory` / `ChatMemoryStore`, and any
+`@PreDestroy` / `@Observes` handler are **lifecycle-bearing**. Conversation
+memory was lost across Telegram updates ([ADR 0006](./docs/adr/0006-application-scoped-ai-service-for-memory.md))
+because such a component was deleted on bytecode reasoning that a green unit
+test appeared to confirm — twice. The rules below are the cost of that and
+are binding for any lifecycle-bearing change.
+
+- **Docs first, bytecode last.** When unsure how a framework manages a
+  scope, bean, or memory lifecycle, consult the docs via the `context7` or
+  `quarkus-agent` MCP *before* decompiling jars. Bytecode confirms a
+  documented contract; it does not substitute for reading it.
+- **No "redundant" verdict on a lifecycle component without a doc check.**
+  Before calling such a class redundant, obsolete, or safe to delete, verify
+  its documented lifecycle behavior via the doc MCPs and cite the source in
+  the PR body or an ADR. "It's a singleton" / "the diff looks dead" is a fact,
+  not a verdict.
+- **A green test proves only what it exercises.** A test that does not drive
+  the real scope boundary — CDI request-context activate/terminate, bean
+  `@PreDestroy` — is not evidence about lifecycle or cross-request
+  persistence, even when it passes. (`--rerun-tasks` and a clean suite change
+  nothing here; the gap is *test altitude*, not the runner.) For persistence
+  behavior, write an integration test that reproduces the real path: an
+  independent request context per call, mirroring one poll / webhook cycle
+  (see `TelegramConversationMemoryTest`).
+- **Docs vs. empirics conflict → probe, don't delete.** If a local result
+  disagrees with the official docs, resolve it with an isolated diagnostic
+  probe and/or the integration test above *before* proposing any deletion of
+  a lifecycle component — never by guessing which side is right.
+- **A test pass is not a live verification.** Record behavior as "verified"
+  only from an integration test that drives the real boundary, or from a live
+  smoke; state which in `docs/progress.md`. Never write "live-confirmed" off a
+  green suite alone.
+
+**Enforcement.** The deletion rule is backed by `.claude/hooks/pre-delete-guard.sh`
+(PreToolUse on Bash): it emits this §8 reminder when an `rm` / `git rm` targets a
+lifecycle-bearing `src/main/**.java` file (one carrying a CDI scope, `@Produces`,
+`@PreDestroy`, `@Observes`, or `ChatMemory*` / `*Store`). Advisory only — it warns, it
+does not block. The deterministic backstop is the CI e2e test
+(`TelegramConversationMemoryTest` in `ci.yml`): break the scope and it goes red.

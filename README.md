@@ -35,9 +35,10 @@ Items not yet implemented are marked _(planned)_; see
 * Telegram bot via long polling
 * Google Gemini via `quarkus-langchain4j-ai-gemini`
 * `POST /chat` and `POST /chat/stream` (SSE) _(planned)_
-* In-memory bounded conversation history per session _(planned)_
+* In-memory bounded conversation history per session
 * Streaming token output, with throttled Telegram message edits _(planned)_
-* `/start`, `/reset`, `/status` Telegram commands _(planned)_
+* `/reset` Telegram command
+* `/start`, `/status` Telegram commands _(planned)_
 * Structured logs with per-turn correlation id _(planned)_
 * Unit tests covering memory, dispatch, and the Telegram renderer _(planned)_
 
@@ -116,13 +117,13 @@ export TELEGRAM_BOT_TOKEN=...
 
 ---
 
-## Telegram commands (planned)
+## Telegram commands
 
-| Command   | Behaviour                       |
-| --------- | ------------------------------- |
-| `/start`  | welcome message                 |
-| `/reset`  | clears conversation memory      |
-| `/status` | uptime + memory size            |
+| Command   | Behaviour                                |
+| --------- | ---------------------------------------- |
+| `/reset`  | clears conversation memory               |
+| `/start`  | welcome message _(planned)_              |
+| `/status` | uptime + memory size _(planned)_         |
 
 `/provider` is intentionally not part of the MVP. It arrives with the
 second provider, alongside the runtime refactor.
