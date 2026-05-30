@@ -34,4 +34,3 @@ public class AppScopedChatMemoryStore implements ChatMemoryStore {
         store.remove(memoryId);
     }
 }
-
