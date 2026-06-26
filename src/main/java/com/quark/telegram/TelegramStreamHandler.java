@@ -3,6 +3,7 @@ package com.quark.telegram;
 import com.quark.chat.Assistant;
 import com.quark.telegram.TelegramMessages.EditMessageText;
 import io.quarkus.logging.Log;
+import io.smallrye.mutiny.subscription.Cancellable;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.util.concurrent.CountDownLatch;
@@ -19,6 +20,10 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
  *
  * <p>buffer and lastEdit are method-local — this bean is @ApplicationScoped (singleton) and
  * stream() may be called concurrently for different users.
+ *
+ * <p>Callbacks execute on Mutiny's emitter thread; that thread does not carry the CDI request
+ * context. All injected beans used inside callbacks (TelegramApi, the latch, buffer) must be
+ * app-scoped or method-local — do not introduce request-scoped dependencies in callbacks.
  */
 @ApplicationScoped
 public class TelegramStreamHandler {
@@ -38,7 +43,7 @@ public class TelegramStreamHandler {
         StringBuilder buffer = new StringBuilder();
         AtomicLong lastEdit = new AtomicLong(System.currentTimeMillis());
 
-        assistant.streamChat(sessionId, userText)
+        Cancellable subscription = assistant.streamChat(sessionId, userText)
             .subscribe().with(
                 token -> {
                     buffer.append(token);
@@ -60,8 +65,9 @@ public class TelegramStreamHandler {
 
         try {
             if (!latch.await(60, TimeUnit.SECONDS)) {
-                Log.warn("Stream timed out for session " + sessionId + " — flushing buffer");
-                flushBuffer(chatId, messageId, buffer);
+                Log.warn("Stream timed out for session " + sessionId + " — cancelling subscription");
+                subscription.cancel();
+                tryEdit(chatId, messageId, TelegramMessages.ERR_FALLBACK);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

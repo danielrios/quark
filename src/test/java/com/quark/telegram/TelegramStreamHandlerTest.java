@@ -92,7 +92,7 @@ class TelegramStreamHandlerTest {
 
         ArgumentCaptor<EditMessageText> captor = ArgumentCaptor.forClass(EditMessageText.class);
         verify(mockApi, times(1)).editMessageText(captor.capture());
-        assertEquals("Something went wrong.", captor.getValue().text());
+        assertEquals(TelegramMessages.ERR_FALLBACK, captor.getValue().text());
     }
 
     /**
