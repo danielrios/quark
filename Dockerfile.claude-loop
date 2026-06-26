@@ -46,12 +46,15 @@ ARG USER_GID=1000
 RUN if getent group ${USER_GID} ; then groupmod -n ${USER_NAME} $(getent group ${USER_GID} | cut -d: -f1) ; else groupadd --gid ${USER_GID} ${USER_NAME} ; fi \
     && if getent passwd ${USER_UID} ; then usermod -l ${USER_NAME} -g ${USER_GID} -d /home/${USER_NAME} -m $(getent passwd ${USER_UID} | cut -d: -f1) ; else useradd --uid ${USER_UID} --gid ${USER_GID} -m ${USER_NAME} ; fi
 
-# Persistence directories
+# Persistence directories, workspace trust, and plugin path compat
 RUN mkdir -p /home/${USER_NAME}/.claude \
              /home/${USER_NAME}/.gradle \
              /home/${USER_NAME}/.jbang \
+             /home/rios \
     && cp -r /opt/jbang/* /home/${USER_NAME}/.jbang/ \
-    && chown -R ${USER_NAME}:${USER_NAME} /home/${USER_NAME}
+    && echo '{"projects":{"/workspace":{"hasTrustDialogAccepted":true}}}' > /home/${USER_NAME}/.claude.json \
+    && chown -R ${USER_NAME}:${USER_NAME} /home/${USER_NAME} \
+    && rmdir /home/rios && ln -s /home/${USER_NAME} /home/rios
 
 ENV PATH="/home/${USER_NAME}/.jbang/bin:${PATH}"
 
