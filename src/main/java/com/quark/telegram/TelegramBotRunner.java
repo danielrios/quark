@@ -4,6 +4,7 @@ import com.quark.chat.Assistant;
 import com.quark.telegram.TelegramMessages.GetUpdatesResponse;
 import com.quark.telegram.TelegramMessages.IncomingText;
 import com.quark.telegram.TelegramMessages.SendMessage;
+import com.quark.telegram.TelegramMessages.SendMessageResponse;
 import com.quark.telegram.TelegramMessages.TelegramUpdate;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
@@ -30,6 +31,9 @@ public class TelegramBotRunner {
 
     @Inject
     ChatMemoryStore chatMemoryStore;
+
+    @Inject
+    TelegramStreamHandler streamHandler;
 
     @ConfigProperty(name = "quark.telegram.enabled")
     boolean enabled;
@@ -86,9 +90,15 @@ public class TelegramBotRunner {
                 return;
             }
             String sessionId = String.valueOf(incoming.chatId());
-            String reply = dispatch(sessionId, incoming.text());
-            api.sendMessage(
-                    new SendMessage(incoming.chatId(), TelegramMessages.clampToTelegramLimit(reply)));
+            long chatId = incoming.chatId();
+
+            if (TelegramCommands.parse(incoming.text()) == TelegramCommands.Command.RESET) {
+                String reply = dispatch(sessionId, incoming.text());
+                api.sendMessage(new SendMessage(chatId, reply));
+            } else {
+                SendMessageResponse placeholder = api.sendMessage(new SendMessage(chatId, "…"));
+                streamHandler.stream(chatId, placeholder.result().messageId(), sessionId, incoming.text());
+            }
         } catch (Exception e) {
             Log.error("Failed to handle update " + update.updateId(), e);
         } finally {
@@ -96,6 +106,8 @@ public class TelegramBotRunner {
         }
     }
 
+    // Package-private: test seam used by TelegramBotRunnerResetTest and TelegramConversationMemoryTest.
+    // Handles commands and blocking chat. The live path uses handle() → TelegramStreamHandler.
     String dispatch(String sessionId, String text) {
         switch (TelegramCommands.parse(text)) {
             case RESET:
