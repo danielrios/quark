@@ -50,7 +50,7 @@ public class TelegramStreamHandler {
                 },
                 error -> {
                     Log.error("Stream error for session " + sessionId, error);
-                    tryEdit(chatId, messageId, "Something went wrong.");
+                    tryEdit(chatId, messageId, TelegramMessages.clampToTelegramLimit("Something went wrong."));
                     latch.countDown();
                 },
                 () -> {
