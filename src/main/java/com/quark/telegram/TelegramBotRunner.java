@@ -94,9 +94,13 @@ public class TelegramBotRunner {
 
             if (TelegramCommands.parse(incoming.text()) == TelegramCommands.Command.RESET) {
                 String reply = dispatch(sessionId, incoming.text());
-                api.sendMessage(new SendMessage(chatId, reply));
+                api.sendMessage(new SendMessage(chatId, TelegramMessages.clampToTelegramLimit(reply)));
             } else {
                 SendMessageResponse placeholder = api.sendMessage(new SendMessage(chatId, "…"));
+                if (!placeholder.ok() || placeholder.result() == null) {
+                    Log.warn("Failed to send placeholder for chatId=" + chatId);
+                    return;
+                }
                 streamHandler.stream(chatId, placeholder.result().messageId(), sessionId, incoming.text());
             }
         } catch (Exception e) {
