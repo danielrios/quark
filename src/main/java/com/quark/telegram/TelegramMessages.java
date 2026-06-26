@@ -21,6 +21,15 @@ public final class TelegramMessages {
 
     public record SendMessage(@JsonProperty("chat_id") long chatId, String text) {}
 
+    public record SendMessageResponse(boolean ok, MessageResult result) {}
+
+    public record MessageResult(@JsonProperty("message_id") long messageId) {}
+
+    public record EditMessageText(
+        @JsonProperty("chat_id") long chatId,
+        @JsonProperty("message_id") long messageId,
+        String text) {}
+
     public record IncomingText(long chatId, String text) {}
 
     public static Optional<IncomingText> extractText(TelegramUpdate update) {
