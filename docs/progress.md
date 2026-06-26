@@ -20,6 +20,10 @@ live stack traces.
 ## Active Trajectory Logs / Error Traces
 <!-- Append the most recent entry at the top. Trim older entries on each session — they live in the git log and PR descriptions, not here. -->
 
+### 2026-06-26 01:46Z — Plan 3 implementation complete — Telegram streaming via throttled edits
+- branch: plan-3-telegram-streaming
+- status: All tasks done (Tasks 1-5). `TelegramStreamHandler` (CountDownLatch streaming loop, 4 TDD tests), DTOs, `streamChat()` on `Assistant`, `handle()` wired for streaming CHAT path. 30 tests, 0 failures. Gate: MCP `devui-testing_runTests`. Next: `/simplify`, open PR, `/requesting-code-review` Opus, `/finishing-a-development-branch` with manual Telegram smoke.
+
 ### 2026-05-30 — Governance: CLAUDE.md §8 (lifecycle/deletion discipline) + context7 MCP
 - Added **§8** to CLAUDE.md capturing the PR #14 lesson as binding rules for lifecycle-bearing changes: docs-first/bytecode-last; no "redundant" verdict on a lifecycle component without a doc-MCP check + citation; a green test proves only what it exercises (test *altitude*, not `--rerun-tasks`, was the false-positive cause); docs-vs-empirics conflict → probe, don't delete; a test pass is not a live verification.
 - Registered `mcp__context7__*` + quarkus-agent doc tools as pre-approved doc-lookup affordances (§5), and added a §8 caveat to the "No guessing" principle (§6) — a green gate certifies only what tests exercise.
@@ -35,23 +39,3 @@ live stack traces.
 - **Test gate:** `./gradlew test` → BUILD SUCCESSFUL, 26 tests, zero failures (10 `TelegramCommandsTest` + 1 `AssistantMemoryWiringTest` + 2 `TelegramBotRunnerResetTest` + 3 `TelegramConversationMemoryTest` + 10 existing).
 - **Live verification:** the **shipped** config **B** (custom store deleted, `@ApplicationScoped Assistant` + default store) was live-confirmed by Daniel on 2026-05-30 — two-turn memory persists and `/reset` clears, end-to-end through real Telegram + Gemini. Matches the e2e test prediction.
 
-### 2026-05-29 — Plan 2 complete (branch `worktree-plan-2-working-memory-reset`)
-- **Shipped:** per-session conversation memory via `@MemoryId String sessionId` on `Assistant.chat()` — LangChain4j's built-in `ChatMemoryProvider` supplies a bounded `MessageWindowChatMemory` per session over the default in-memory store, zero new classes. `/reset` wired in `TelegramBotRunner.dispatch()` via `ChatMemoryStore.deleteMessages(sessionId)`, returns "Memory cleared. Starting fresh."
-- **Spec §6.2 deviation:** plan used LangChain4j built-in memory instead of the spec's suggested hand-rolled `ChatMemory`/`Map` approach. Rationale: strictly less code, idiomatic Quarkus, within ADR 0003's no-abstractions envelope, and the spec hedged its shape ("suggested structure"). Zero bespoke storage classes introduced.
-- **Task 4 dev-mode verification:** deferred — MCP `quarkus_start` stuck in "starting" state with empty log output after ~5 minutes; no crash, no error. Automated tests cover all functional assertions; the live Telegram smoke test is blocked on MCP dev-mode start reliability, not on correctness.
-- **Test gate:** `./gradlew test` → BUILD SUCCESSFUL, 24 tests, zero failures (10 `TelegramCommandsTest` + 1 `AssistantMemoryWiringTest` + 2 `TelegramBotRunnerResetTest` + 1 `ChatMemoryPersistenceTest` + 10 existing).
-
-### 2026-05-29 — Plan 1 closed out: PR #11 merged to `main`
-- PR #11 merged (`8dc5c84`); release-please cut 0.2.0. Two post-review fixes landed: clamp Telegram replies to 4096 chars (`TelegramMessages.clampToTelegramLimit`, +3 TDD tests) and `gemini-2.0-flash` → `gemini-2.5-flash` (old model 404s for newly issued API keys).
-- Live verified end-to-end by the user: real Telegram message → Gemini reply. A persistent 409 seen during testing was root-caused to a stale duplicate quark poller (killed) — not a code bug; hermes-agent runs on a separate bot token.
-- Deferred (Minor, by design): capped backoff on persistent poll failure, `ok == false` vs empty batch, daemon-shutdown comment. Candidates for a small poll-loop hardening pass, not Plan 1.
-
-### 2026-05-29 17:03Z — PR #11 review fix: clamp Telegram replies to 4096-char limit (pure fn + TDD) and mark planned README scope items; ./gradlew test + spotlessCheck green (10 tests)
-- branch: claude/plan-1-telegram-gemini-skeleton
-- status: Done — addressed the one Important finding from PR #11 review (silent drop of >4096-char Gemini replies). Added pure `TelegramMessages.clampToTelegramLimit` (TDD: 3 new tests), wired into `TelegramBotRunner.handle()`; marked unimplemented README "MVP scope / In" items as _(planned)_. Next: commit + push so PR #11 updates.
-
-### 2026-05-28 — Plan 1 complete (branch `claude/plan-1-telegram-gemini-skeleton`)
-- All tasks 0–5 executed. 7 automated tests pass (BUILD SUCCESSFUL).
-- Smoke test: Telegram → poller → Gemini reached and authenticated. Free-tier quota exhausted on key provided; architecture is verified end-to-end.
-- One unplanned fix: `ContextNotActiveException` on `Assistant` call from virtual thread — fixed by programmatic CDI request context activation per message in `TelegramBotRunner.handle()`.
-- Test gate fallback: `./gradlew test` throughout (MCP `callTool` port-detection bug persists).
