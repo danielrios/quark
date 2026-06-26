@@ -66,14 +66,51 @@ Hard-blocked at the harness layer:
 
 - `./gradlew quarkusDev` and any foreground dev-mode variant. Use the MCP per §1.
 
-Slash commands:
+Slash commands (`.claude/commands/`):
 
 - `/baseline-test` — runs the `quarkus-agent` MCP test gate (§3) and reports.
 - `/progress <one-liner>` — appends a timestamped entry to `docs/progress.md` (§2 state rule).
+- **Loop phases** (driven by `scripts/orchestrate.sh`, see §9): `/brainstorm`,
+  `/spec`, `/plan`, `/implement`, `/review`, `/simplify`, `/advisor`,
+  `/handoff`, `/finish`. Each is a thin wrapper over a superpowers / Matt Pocock
+  skill plus this project's contract (output path, test gate, completion marker).
 
 `SessionStart` warns if Java 25, `gradlew`, or the `quarkus-agent` MCP are missing.
 
 Full rationale: [ADR 0004](./docs/adr/0004-claude-code-harness.md).
+
+## 5a. Autonomous loop & skill stack
+
+The multi-model loop ([ADR 0007](./docs/adr/0007-multi-model-loop-harness.md),
+`scripts/orchestrate.sh`) routes each lifecycle phase to a model and a skill:
+
+| Phase | Model | Wraps |
+|-------|-------|-------|
+| brainstorm | Opus | `superpowers:brainstorming` + `domain-modeling` + `grilling` |
+| spec | Opus | bespoke + `domain-modeling` + `grilling` |
+| plan | Opus | `superpowers:writing-plans` + `codebase-design` |
+| implement | Sonnet | `superpowers:executing-plans` + `:test-driven-development` + `caveman` + `cavecrew` |
+| review | Opus | `superpowers:requesting-/receiving-code-review` + `codebase-design` + `caveman` |
+| simplify | Sonnet | bespoke + `caveman` |
+| advisor | Opus | `superpowers:systematic-debugging` + `diagnosing-bugs` (3-strike escalation, §4) |
+| handoff / finish | Sonnet | bespoke / `superpowers:finishing-a-development-branch` |
+
+Contracts the loop depends on (do not break silently):
+
+- **Artifact paths.** Each producing phase writes `docs/superpowers/<kind>/<date>-<slug>.md`;
+  the next phase re-resolves the newest file in that dir, so a slug/date mismatch warns
+  instead of feeding a missing path forward.
+- **Completion marker.** `/implement` (or `/advisor`) creates
+  `.claude/state/IMPL_COMPLETE` only when every plan checkbox is done and the gate is
+  green. That marker is the *only* early exit from the implement loop.
+- **`caveman` mode** is mandatory for the high-volume phases (implement, review, simplify)
+  to conserve context; `cavecrew` subagents handle "locate code" / "isolated edit"
+  sub-steps in the long implement loop.
+- **Issue-tracker / triage / domain docs** live in `docs/agents/` (GitHub issues,
+  default triage labels, single-context `CONTEXT.md`); skills read them there.
+- **Secrets.** `.mcp.json` reads `${CONTEXT7_API_KEY}` from the environment — never
+  hardcode it. Set it in `.env` (gitignored) or your shell; docker-compose passes it
+  through. See `.env.example`.
 
 ## 6. Engineering Principles
 
@@ -135,3 +172,17 @@ lifecycle-bearing `src/main/**.java` file (one carrying a CDI scope, `@Produces`
 `@PreDestroy`, `@Observes`, or `ChatMemory*` / `*Store`). Advisory only — it warns, it
 does not block. The deterministic backstop is the CI e2e test
 (`TelegramConversationMemoryTest` in `ci.yml`): break the scope and it goes red.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues; `gh` CLI is used for all operations. External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical labels in use (no overrides). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo — one `CONTEXT.md` (created lazily by `/domain-modeling`) + `docs/adr/` at the root. See `docs/agents/domain.md`.
