@@ -187,7 +187,7 @@ if ! should_skip "implement"; then
     ((iteration++))
 
     if $in_advisor_mode; then
-      run_phase "advisor-${iteration}" "$OPUS_MODEL" "/advisor docs/superpowers/plans/${DATE}-${FEATURE_SLUG}.md"
+      run_phase "advisor-${iteration}" "$OPUS_MODEL" "/systematic-debugging docs/superpowers/plans/${DATE}-${FEATURE_SLUG}.md"
       phase_exit=$?
     else
       run_phase "implement-${iteration}" "$SONNET_MODEL" "/implement docs/superpowers/plans/${DATE}-${FEATURE_SLUG}.md"
@@ -258,7 +258,8 @@ fi
 # --- Final gate ---------------------------------------------------------------
 echo ""
 echo -e "${BLUE}━━━ Final verification ━━━${NC}"
-run_phase "final-gate" "$SONNET_MODEL" "/handoff ${FEATURE}" || true
+run_phase "final-gate" "$SONNET_MODEL" "/verification-before-completion ${FEATURE}" || true
+run_phase "finish" "$SONNET_MODEL" "/finishing-a-development-branch" || true
 
 # --- Summary ------------------------------------------------------------------
 echo ""
