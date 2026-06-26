@@ -143,201 +143,12 @@ should_skip() {
   (( phase_idx < skip_idx ))
 }
 
-# --- Phase prompts -----------------------------------------------------------
-# Each prompt instructs the agent to read CLAUDE.md (binding) and existing
-# project context, then produce a specific artifact.
-
-BRAINSTORM_PROMPT="$(cat <<'PROMPT'
-You are running in autonomous mode inside the quark project.
-
-## Your role: Brainstorm Agent
-
-Read these files FIRST:
-- CLAUDE.md (binding contract)
-- ARCHITECTURE.md
-- MANIFESTO.md
-- docs/progress.md
-
-## Task
-Brainstorm approaches for the following feature:
-FEATURE_PLACEHOLDER
-
-Create the file: docs/superpowers/brainstorms/DATE_PLACEHOLDER-SLUG_PLACEHOLDER.md
-
-Include:
-1. Problem statement (1 paragraph)
-2. Three distinct approaches with trade-offs
-3. Recommended approach with justification
-4. Risks and mitigations
-5. Dependencies on existing code
-
-## Rules
-- Follow MANIFESTO.md philosophy (explicit > magical, streaming-first)
-- Do NOT implement anything — brainstorm only
-- Reference ADRs where relevant
-- git add and commit with message: "docs: brainstorm for FEATURE_PLACEHOLDER"
-PROMPT
-)"
-
-SPEC_PROMPT="$(cat <<'PROMPT'
-You are running in autonomous mode inside the quark project.
-
-## Your role: Spec Writer
-
-Read these files FIRST:
-- CLAUDE.md (binding contract)
-- ARCHITECTURE.md
-- The brainstorm: docs/superpowers/brainstorms/DATE_PLACEHOLDER-SLUG_PLACEHOLDER.md
-- Existing specs in docs/superpowers/specs/ for format reference
-
-## Task
-Write a formal specification for:
-FEATURE_PLACEHOLDER
-
-Create the file: docs/superpowers/specs/DATE_PLACEHOLDER-SLUG_PLACEHOLDER.md
-
-Follow the format of existing specs. Include:
-1. Goal (1 sentence)
-2. Non-goals (what this does NOT do)
-3. Design (detailed technical approach)
-4. API surface / interfaces
-5. Test strategy (what tests prove it works)
-6. Rollback plan
-
-## Rules
-- Follow CLAUDE.md §6 (YAGNI/KISS)
-- Do NOT implement anything — spec only
-- Reference the brainstorm decisions
-- git add and commit with message: "docs: spec for FEATURE_PLACEHOLDER"
-PROMPT
-)"
-
-PLAN_PROMPT="$(cat <<'PROMPT'
-You are running in autonomous mode inside the quark project.
-
-## Your role: Planner
-
-Read these files FIRST:
-- CLAUDE.md (binding contract — especially §3 test gate, §4 failure escalation)
-- The spec: docs/superpowers/specs/DATE_PLACEHOLDER-SLUG_PLACEHOLDER.md
-- Existing plans in docs/superpowers/plans/ for format reference
-- docs/progress.md for current project state
-
-## Task
-Create an ordered implementation plan for:
-FEATURE_PLACEHOLDER
-
-Create the file: docs/superpowers/plans/DATE_PLACEHOLDER-SLUG_PLACEHOLDER.md
-
-Follow the format of existing plans. Each task must:
-1. Have a clear, testable definition of done
-2. Reference the test gate (CLAUDE.md §3)
-3. Follow WIP=1 (one task at a time)
-4. Include estimated complexity (S/M/L)
-
-## Rules
-- Tasks must be ordered by dependency
-- Each task must be completable in a single Claude Code session
-- Include a "Task 0: setup/scaffolding" if needed
-- git add and commit with message: "docs: plan for FEATURE_PLACEHOLDER"
-PROMPT
-)"
-
-# Implementation prompt is built dynamically per task (see loop below)
-
-REVIEW_PROMPT="$(cat <<'PROMPT'
-You are running in autonomous mode inside the quark project.
-
-## Your role: Adversarial Reviewer
-
-You are reviewing code written by a DIFFERENT model (Sonnet). Your job is to
-find bugs, spec violations, and simplification opportunities that Sonnet missed.
-
-Read these files FIRST:
-- CLAUDE.md (binding contract — especially §6 YAGNI, §7 no drift, §8 lifecycle)
-- The spec: docs/superpowers/specs/DATE_PLACEHOLDER-SLUG_PLACEHOLDER.md
-- The plan: docs/superpowers/plans/DATE_PLACEHOLDER-SLUG_PLACEHOLDER.md
-- docs/progress.md
-
-Then examine the implementation:
-- Run: git diff main..HEAD --stat (to see what changed)
-- Run: git diff main..HEAD (to see the actual changes)
-- Read the changed files in full
-
-## Task
-Write a review: docs/superpowers/reviews/DATE_PLACEHOLDER-SLUG_PLACEHOLDER-review.md
-
-Organize findings by severity:
-1. **Blockers** — Bugs, spec violations, test gaps that must be fixed
-2. **Improvements** — YAGNI violations, unnecessary complexity, missing docs
-3. **Nits** — Style, naming, minor cleanup
-
-For each finding:
-- Quote the relevant code
-- Explain the problem
-- Suggest a fix
-
-## Verification
-- Run the test gate: first try mcp__quarkus-agent__quarkus_callTool with
-  toolName="devui-testing_runTests". If MCP is unreachable, fall back to
-  ./gradlew test as the gate.
-- Run ./gradlew spotlessCheck
-- Report results in the review
-
-## Rules
-- Do NOT fix anything — review only
-- Be rigorous but fair — flag real issues, not style preferences
-- git add and commit with message: "docs: review for FEATURE_PLACEHOLDER"
-PROMPT
-)"
-
-SIMPLIFY_PROMPT="$(cat <<'PROMPT'
-You are running in autonomous mode inside the quark project.
-
-## Your role: Simplifier
-
-Read these files FIRST:
-- CLAUDE.md (binding contract — especially §6 YAGNI/KISS, §8 lifecycle discipline)
-- The review: docs/superpowers/reviews/DATE_PLACEHOLDER-SLUG_PLACEHOLDER-review.md
-- docs/progress.md
-
-## Task
-Address each finding from the review:
-1. Fix all **Blockers**
-2. Address **Improvements** that align with CLAUDE.md §6
-3. Apply **Nits** if they improve readability
-
-## Verification
-After EACH change:
-- Run the test gate: first try mcp__quarkus-agent__quarkus_callTool with
-  toolName="devui-testing_runTests". If MCP is unreachable, fall back to
-  ./gradlew test.
-- Run ./gradlew spotlessCheck
-- Do NOT proceed to the next fix if tests fail
-
-## Rules
-- Follow CLAUDE.md §3 (test gate before and after)
-- Follow CLAUDE.md §4 (3-strike escalation)
-- Update docs/progress.md via the /progress command
-- Commit each logical fix separately with descriptive messages
-PROMPT
-)"
-
-# --- Substitute placeholders -------------------------------------------------
-substitute() {
-  local text="$1"
-  echo "$text" \
-    | sed "s|FEATURE_PLACEHOLDER|${FEATURE}|g" \
-    | sed "s|DATE_PLACEHOLDER|${DATE}|g" \
-    | sed "s|SLUG_PLACEHOLDER|${FEATURE_SLUG}|g"
-}
-
 # --- Phase execution ---------------------------------------------------------
 
 # BRAINSTORM
 if ! should_skip "brainstorm"; then
   mkdir -p docs/superpowers/brainstorms
-  run_phase "brainstorm" "$OPUS_MODEL" "$(substitute "$BRAINSTORM_PROMPT")" || {
+  run_phase "brainstorm" "$OPUS_MODEL" "/brainstorm ${FEATURE}" || {
     echo -e "${RED}Brainstorm phase failed. Aborting.${NC}"
     exit 1
   }
@@ -346,7 +157,7 @@ fi
 
 # SPEC
 if ! should_skip "spec"; then
-  run_phase "spec" "$OPUS_MODEL" "$(substitute "$SPEC_PROMPT")" || {
+  run_phase "spec" "$OPUS_MODEL" "/spec ${FEATURE}" || {
     echo -e "${RED}Spec phase failed. Aborting.${NC}"
     exit 1
   }
@@ -355,7 +166,7 @@ fi
 
 # PLAN
 if ! should_skip "plan"; then
-  run_phase "plan" "$OPUS_MODEL" "$(substitute "$PLAN_PROMPT")" || {
+  run_phase "plan" "$OPUS_MODEL" "/plan docs/superpowers/specs/${DATE}-${FEATURE_SLUG}.md" || {
     echo -e "${RED}Plan phase failed. Aborting.${NC}"
     exit 1
   }
@@ -375,87 +186,11 @@ if ! should_skip "implement"; then
   while (( iteration < MAX_IMPL_ITERATIONS )); do
     ((iteration++))
 
-    # Build the implementation prompt dynamically
-    IMPL_PROMPT="$(cat <<IMPLEOF
-You are running in autonomous mode inside the quark project.
-
-## Your role: Implementer (iteration ${iteration}/${MAX_IMPL_ITERATIONS})
-
-Read these files FIRST:
-- CLAUDE.md (binding contract — ALL rules are active)
-- The plan: docs/superpowers/plans/${DATE}-${FEATURE_SLUG}.md
-- docs/progress.md (current state)
-
-## Task
-Execute the NEXT unchecked task from the plan.
-Look for tasks marked with \`- [ ]\` and execute the first one.
-
-## Tool strategy
-- **Primary:** Use mcp__quarkus-agent__quarkus_callTool with
-  toolName="devui-testing_runTests" for the test gate.
-  Use mcp__quarkus-agent__quarkus_logs for log inspection.
-  Use mcp__quarkus-agent__quarkus_searchDocs for official Quarkus docs.
-- **Supplementary docs:** Use mcp__context7__resolve-library-id and
-  mcp__context7__query-docs for Quarkiverse, langchain4j, and other
-  libraries not covered by quarkus-agent docs.
-- **Fallback:** If MCP is unreachable, use ./gradlew test as the gate.
-
-## After implementation
-1. Run the test gate (see tool strategy above)
-2. Run ./gradlew spotlessCheck
-3. Mark the task as done in the plan: change \`- [ ]\` to \`- [x]\`
-4. Update docs/progress.md
-5. git add and commit with a descriptive message
-
-## Completion signal
-If ALL tasks in the plan are checked \`[x]\`, create the file:
-.claude/state/IMPL_COMPLETE
-
-## Rules
-- CLAUDE.md §2: WIP=1 — one task per iteration
-- CLAUDE.md §3: test gate before and after
-- CLAUDE.md §4: if test fails 3 times with same error, STOP and write to progress.md
-IMPLEOF
-)"
-
     if $in_advisor_mode; then
-      # Opus advisor mode — deeper diagnosis
-      IMPL_PROMPT="$(cat <<ADVISOREOF
-You are running in autonomous mode inside the quark project.
-
-## Your role: Opus Advisor (attempt ${advisor_attempts}/${MAX_ADVISOR_FAILURES})
-
-The Sonnet implementer has failed ${MAX_SONNET_FAILURES} consecutive times on
-the current task. You are called in as an expert to diagnose and fix the issue.
-
-Read these files FIRST:
-- CLAUDE.md (binding contract — especially §4, §8)
-- The plan: docs/superpowers/plans/${DATE}-${FEATURE_SLUG}.md
-- docs/progress.md (includes the error traces from failed attempts)
-- Recent loop logs in .claude/state/loop-logs/
-
-## Task
-1. Read the error traces in docs/progress.md
-2. Diagnose the root cause
-3. Fix the issue
-4. Run the test gate:
-   - Primary: mcp__quarkus-agent__quarkus_callTool with toolName="devui-testing_runTests"
-   - For docs: mcp__quarkus-agent__quarkus_searchDocs (official Quarkus),
-     mcp__context7__* (Quarkiverse, langchain4j, other libs)
-   - Fallback: ./gradlew test
-5. If successful, mark the task done in the plan and update progress.md
-6. If the fix works, create .claude/state/IMPL_COMPLETE if all tasks are done
-7. git add and commit
-
-## Rules
-- Follow CLAUDE.md §8 lifecycle discipline if touching CDI components
-- Consult docs via MCP before making assumptions
-ADVISOREOF
-)"
-      run_phase "advisor-${iteration}" "$OPUS_MODEL" "$IMPL_PROMPT"
+      run_phase "advisor-${iteration}" "$OPUS_MODEL" "/advisor docs/superpowers/plans/${DATE}-${FEATURE_SLUG}.md"
       phase_exit=$?
     else
-      run_phase "implement-${iteration}" "$SONNET_MODEL" "$IMPL_PROMPT"
+      run_phase "implement-${iteration}" "$SONNET_MODEL" "/implement docs/superpowers/plans/${DATE}-${FEATURE_SLUG}.md"
       phase_exit=$?
     fi
 
@@ -506,7 +241,7 @@ fi
 # REVIEW
 if ! should_skip "review"; then
   mkdir -p docs/superpowers/reviews
-  run_phase "review" "$OPUS_MODEL" "$(substitute "$REVIEW_PROMPT")" || {
+  run_phase "review" "$OPUS_MODEL" "/review docs/superpowers/specs/${DATE}-${FEATURE_SLUG}.md" || {
     echo -e "${YELLOW}Review phase had issues but continuing to simplify...${NC}"
   }
   sleep "$SLEEP_BETWEEN"
@@ -514,7 +249,7 @@ fi
 
 # SIMPLIFY
 if ! should_skip "simplify"; then
-  run_phase "simplify" "$SONNET_MODEL" "$(substitute "$SIMPLIFY_PROMPT")" || {
+  run_phase "simplify" "$SONNET_MODEL" "/simplify docs/superpowers/reviews/${DATE}-${FEATURE_SLUG}-review.md" || {
     echo -e "${YELLOW}Simplify phase had issues. Manual review recommended.${NC}"
   }
   sleep "$SLEEP_BETWEEN"
@@ -523,27 +258,7 @@ fi
 # --- Final gate ---------------------------------------------------------------
 echo ""
 echo -e "${BLUE}━━━ Final verification ━━━${NC}"
-run_phase "final-gate" "$SONNET_MODEL" "$(cat <<FINALEOF
-You are running in autonomous mode inside the quark project.
-
-## Your role: Final Gate
-
-Read CLAUDE.md. Run the full verification:
-
-1. Test gate: first try mcp__quarkus-agent__quarkus_callTool with
-   toolName="devui-testing_runTests". If unreachable, use ./gradlew test.
-2. ./gradlew spotlessCheck
-3. Verify docs/progress.md is up to date
-4. Verify the plan has all tasks checked
-
-If everything passes:
-- Update docs/progress.md with final status
-- Prepare a PR description summarizing the feature
-- git add and commit with message: "feat: ${FEATURE}"
-
-If anything fails, document it in docs/progress.md.
-FINALEOF
-)" || true
+run_phase "final-gate" "$SONNET_MODEL" "/handoff ${FEATURE}" || true
 
 # --- Summary ------------------------------------------------------------------
 echo ""

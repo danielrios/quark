@@ -19,8 +19,8 @@ services:
       # Project source (read-write)
       - .:/workspace
 
-      # Persistent auth — survives container rebuilds
-      - claude-auth:/home/claude/.claude
+      # Persistent auth — mapped from host for seamless authentication
+      - ~/.claude:/home/claude/.claude
 
       # Gradle cache — avoids re-downloading deps every run
       - gradle-cache:/home/claude/.gradle
@@ -55,8 +55,6 @@ services:
     stdin_open: true
 
 volumes:
-  claude-auth:
-    name: quark-claude-auth
   gradle-cache:
     name: quark-gradle-cache
   jbang-cache:
