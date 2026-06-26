@@ -27,7 +27,7 @@ dependencies {
 }
 
 group = "org.acme"
-version = "0.3.0" // x-release-please-version
+version = "0.4.0" // x-release-please-version
 
 java {
     sourceCompatibility = JavaVersion.VERSION_25
