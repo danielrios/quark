@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "quarkus-agent": {
+      "command": "jbang",
+      "args": [
+        "--quiet",
+        "-Dquarkus.log.console.stderr=true",
+        "quarkus-agent-mcp@quarkusio"
+      ]
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@context7/mcp-server",
+        "--url",
+        "https://mcp.context7.com/mcp",
+        "--api-key",
+        "ctx7sk-8ca2edfc-dc97-4c9d-8b03-bdc427382dd3"
+      ]
+    }
+  }
+}

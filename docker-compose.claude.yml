@@ -1,0 +1,63 @@
+# =============================================================================
+# docker-compose.claude.yml — Claude Code multi-model loop environment
+# Usage:
+#   docker compose -f docker-compose.claude.yml build
+#   docker compose -f docker-compose.claude.yml run --rm claude-loop
+#   docker compose -f docker-compose.claude.yml run --rm claude-loop \
+#     scripts/orchestrate.sh --feature "Plan 3 — Telegram streaming"
+# See: docs/adr/0007-multi-model-loop-harness.md
+# =============================================================================
+
+services:
+  claude-loop:
+    build:
+      context: .
+      dockerfile: Dockerfile.claude-loop
+    user: "claude"
+
+    volumes:
+      # Project source (read-write)
+      - .:/workspace
+
+      # Persistent auth — survives container rebuilds
+      - claude-auth:/home/claude/.claude
+
+      # Gradle cache — avoids re-downloading deps every run
+      - gradle-cache:/home/claude/.gradle
+
+      # JBang cache — keeps quarkus-agent MCP jar cached
+      - jbang-cache:/home/claude/.jbang
+
+    # Full internet access: Anthropic API, Maven Central, npm, GitHub
+    network_mode: bridge
+
+    environment:
+      # Auth: set in .env or pass via CLI
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+
+      # Context optimization
+      - BASH_MAX_OUTPUT_LENGTH=15000
+
+      # Disable non-essential telemetry inside container
+      - CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+
+      # Timezone for readable logs
+      - TZ=America/Sao_Paulo
+
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+
+    tty: true
+    stdin_open: true
+
+volumes:
+  claude-auth:
+    name: quark-claude-auth
+  gradle-cache:
+    name: quark-gradle-cache
+  jbang-cache:
+    name: quark-jbang-cache
