@@ -11,10 +11,10 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 /**
- * Streaming loop for Telegram: sends a placeholder message, then edits it with accumulated tokens
- * from the LLM, throttled to avoid Telegram's rate limit. Blocks the calling virtual thread via
- * CountDownLatch so the CDI request context in TelegramBotRunner.handle() stays active for the
- * full stream duration.
+ * Streaming loop for Telegram: subscribes to an LLM token stream and edits a pre-sent placeholder
+ * message as tokens arrive, throttled to avoid Telegram's rate limit. Blocks the calling virtual
+ * thread via CountDownLatch so the CDI request context in TelegramBotRunner.handle() stays active
+ * for the full stream duration.
  *
  * <p>buffer and lastEdit are method-local — this bean is @ApplicationScoped (singleton) and
  * stream() may be called concurrently for different users.

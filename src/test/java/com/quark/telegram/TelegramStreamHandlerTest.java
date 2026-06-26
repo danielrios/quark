@@ -12,18 +12,14 @@ import static org.mockito.Mockito.when;
 
 import com.quark.chat.Assistant;
 import com.quark.telegram.TelegramMessages.EditMessageText;
-import com.quark.telegram.TelegramMessages.MessageResult;
-import com.quark.telegram.TelegramMessages.SendMessageResponse;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.mutiny.Multi;
 import jakarta.inject.Inject;
 import java.util.List;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
 
 @QuarkusTest
 class TelegramStreamHandlerTest {
@@ -37,12 +33,6 @@ class TelegramStreamHandlerTest {
     @InjectMock
     @RestClient
     TelegramApi mockApi;
-
-    @BeforeEach
-    void stubSendMessage() {
-        when(mockApi.sendMessage(any()))
-            .thenReturn(new SendMessageResponse(true, new MessageResult(42L)));
-    }
 
     /**
      * With throttleMs=0, every token triggers an edit. The final onComplete flush also fires.
