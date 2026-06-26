@@ -8,6 +8,14 @@ Read these project files first:
 - ARCHITECTURE.md
 - The brainstorm document referenced in $ARGUMENTS (or the latest one in `docs/superpowers/brainstorms/`)
 - Existing specs in `docs/superpowers/specs/` for format reference
+- `docs/agents/domain.md` — the domain-doc consumer rules and `CONTEXT.md` vocabulary
+
+## Skills to use
+- `domain-modeling` — define every concept in the spec using the project's
+  ubiquitous language; if a needed term isn't in `CONTEXT.md`, that's a gap to
+  record, not a synonym to invent.
+- `grilling` — before finalizing, interrogate the spec's open questions and
+  assumptions so they surface here rather than mid-implementation.
 
 ## Your task
 
