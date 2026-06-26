@@ -153,13 +153,15 @@ Before any change, confirm the 26-test suite is green.
 
 ---
 
-## Task 3: Add `streamChat()` to `Assistant`
+## Task 3: Add `streamChat()` to `Assistant` ✅ DONE
 
 **Files:** `src/main/java/com/quark/chat/Assistant.java`
 
 `Multi<String>` is the correct return type for streaming in Quarkus LangChain4j `@RegisterAiService` methods (verified against official docs). `TokenStream` is only for the non-Quarkus `AiServices.create()` path.
 
-- [ ] **Step 3.1: Add the streaming method**
+**Gemini streaming verified:** Added `streamChat()`, hot-reloaded in dev mode, 26/26 tests passed — the `quarkus-langchain4j-ai-gemini` extension supports streaming without separate configuration. Committed at `4310142`.
+
+- [x] **Step 3.1: Add the streaming method**
 
   Replace `Assistant.java` with:
 
@@ -195,28 +197,11 @@ Before any change, confirm the 26-test suite is green.
   }
   ```
 
-- [ ] **Step 3.2: Compile**
+- [x] **Step 3.2: Compile** — passed
 
-  ```bash
-  ./gradlew compileJava
-  ```
+- [x] **Step 3.3: Run tests** — 26/26 passed
 
-  Expected: `BUILD SUCCESSFUL`.
-
-- [ ] **Step 3.3: Run tests**
-
-  ```bash
-  ./gradlew test
-  ```
-
-  Expected: 26 tests, 0 failures. `AssistantMemoryWiringTest` checks injection resolves — adding a method does not break it.
-
-- [ ] **Step 3.4: Commit**
-
-  ```bash
-  git add src/main/java/com/quark/chat/Assistant.java
-  git commit -m "feat(chat): add Multi<String> streamChat() to Assistant"
-  ```
+- [x] **Step 3.4: Commit** — `4310142`
 
 ---
 
@@ -398,6 +383,7 @@ Before any change, confirm the 26-test suite is green.
   import jakarta.enterprise.context.ApplicationScoped;
   import jakarta.inject.Inject;
   import java.util.concurrent.CountDownLatch;
+  import java.util.concurrent.TimeUnit;
   import org.eclipse.microprofile.config.inject.ConfigProperty;
   import org.eclipse.microprofile.rest.client.inject.RestClient;
 
@@ -451,7 +437,10 @@ Before any change, confirm the 26-test suite is green.
                   });
 
           try {
-              latch.await();
+              if (!latch.await(60, TimeUnit.SECONDS)) {
+                  Log.warn("Stream timed out for session " + sessionId + " — flushing buffer");
+                  tryEdit(chatId, messageId, TelegramMessages.clampToTelegramLimit(buffer.toString()));
+              }
           } catch (InterruptedException e) {
               Thread.currentThread().interrupt();
           }
@@ -714,3 +703,16 @@ The existing `dispatch()` method is left completely unchanged — memory and res
 - `MessageResult(long messageId)` — defined in Task 2, accessed via `placeholder.result().messageId()` in Task 5 ✓
 - `Multi<String> streamChat(String sessionId, String userMessage)` — defined in Task 3, called in Task 4 ✓
 - `TelegramStreamHandler.stream(long chatId, long messageId, String sessionId, String userText)` — defined in Task 4, called in Task 5 ✓
+
+---
+
+## Post-Review Notes (from Opus code review)
+
+**Resolved:**
+- Gemini `StreamingChatModel` availability — verified empirically: `streamChat()` added, hot-reloaded, 26/26 tests passed. The `quarkus-langchain4j-ai-gemini` extension supports streaming.
+- `latch.await()` timeout — added `latch.await(60, TimeUnit.SECONDS)` with warn + flush on timeout.
+
+**Deferred by design (YAGNI for Plan 3):**
+- `java.time.Clock` injection for throttle batching test — throttle behavior is tested via config (0 = fire every token, which covers wiring). Exact batching window test deferred.
+- Streaming-path memory integration test — `TelegramConversationMemoryTest` covers memory via the blocking `chat()` path. The memory pipeline is identical for streaming (same `@MemoryId` / `ChatMemoryStore`). A dedicated `RecordingStreamingChatModel` test is noted for a future plan.
+- `@InjectMock Assistant` spike — will be verified at Task 4 Step 4.3; fallback is `QuarkusMock.installMockForType`.
