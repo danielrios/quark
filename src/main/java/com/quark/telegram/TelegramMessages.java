@@ -11,6 +11,8 @@ public final class TelegramMessages {
     /** Telegram rejects {@code sendMessage} payloads whose text exceeds 4096 characters. */
     public static final int MAX_MESSAGE_LENGTH = 4096;
 
+    public static final String ERR_FALLBACK = "Something went wrong.";
+
     public record GetUpdatesResponse(boolean ok, List<TelegramUpdate> result) {}
 
     public record TelegramUpdate(@JsonProperty("update_id") long updateId, Message message) {}
@@ -50,6 +52,13 @@ public final class TelegramMessages {
             return text;
         }
         return text.substring(0, MAX_MESSAGE_LENGTH - 1) + "…";
+    }
+
+    public static String clampToTelegramLimit(StringBuilder buffer) {
+        if (buffer.length() <= MAX_MESSAGE_LENGTH) {
+            return buffer.toString();
+        }
+        return buffer.substring(0, MAX_MESSAGE_LENGTH - 1) + "…";
     }
 
     public static long nextOffset(long current, List<TelegramUpdate> updates) {

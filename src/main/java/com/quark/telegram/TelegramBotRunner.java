@@ -128,7 +128,7 @@ public class TelegramBotRunner {
             return assistant.chat(sessionId, userMessage);
         } catch (Exception e) {
             Log.error("Gemini call failed", e);
-            return "Something went wrong.";
+            return TelegramMessages.ERR_FALLBACK;
         }
     }
 

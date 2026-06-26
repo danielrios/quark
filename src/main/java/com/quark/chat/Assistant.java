@@ -19,11 +19,10 @@ import jakarta.enterprise.context.ApplicationScoped;
  */
 @RegisterAiService
 @ApplicationScoped
+@SystemMessage("You are quark, a concise and helpful assistant. Answer in plain text.")
 public interface Assistant {
 
-    @SystemMessage("You are quark, a concise and helpful assistant. Answer in plain text.")
     String chat(@MemoryId String sessionId, @UserMessage String userMessage);
 
-    @SystemMessage("You are quark, a concise and helpful assistant. Answer in plain text.")
     Multi<String> streamChat(@MemoryId String sessionId, @UserMessage String userMessage);
 }
