@@ -4,7 +4,7 @@ import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import io.quarkiverse.langchain4j.RegisterAiService;
-
+import io.smallrye.mutiny.Multi;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
@@ -19,8 +19,10 @@ import jakarta.enterprise.context.ApplicationScoped;
  */
 @RegisterAiService
 @ApplicationScoped
+@SystemMessage("You are quark, a concise and helpful assistant. Answer in plain text.")
 public interface Assistant {
 
-    @SystemMessage("You are quark, a concise and helpful assistant. Answer in plain text.")
     String chat(@MemoryId String sessionId, @UserMessage String userMessage);
+
+    Multi<String> streamChat(@MemoryId String sessionId, @UserMessage String userMessage);
 }

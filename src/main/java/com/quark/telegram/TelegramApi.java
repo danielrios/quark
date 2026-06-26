@@ -1,7 +1,9 @@
 package com.quark.telegram;
 
+import com.quark.telegram.TelegramMessages.EditMessageText;
 import com.quark.telegram.TelegramMessages.GetUpdatesResponse;
 import com.quark.telegram.TelegramMessages.SendMessage;
+import com.quark.telegram.TelegramMessages.SendMessageResponse;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -17,5 +19,9 @@ public interface TelegramApi {
 
     @POST
     @Path("/sendMessage")
-    void sendMessage(SendMessage message);
+    SendMessageResponse sendMessage(SendMessage message);
+
+    @POST
+    @Path("/editMessageText")
+    void editMessageText(EditMessageText edit);
 }
