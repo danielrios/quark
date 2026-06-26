@@ -17,10 +17,10 @@ services:
 
     volumes:
       # Project source (read-write)
-      - .:/workspace
+      - .:/workspace:z
 
       # Persistent auth — mapped from host for seamless authentication
-      - ~/.claude:/home/claude/.claude
+      - ~/.claude:/home/claude/.claude:z
 
       # Gradle cache — avoids re-downloading deps every run
       - gradle-cache:/home/claude/.gradle
