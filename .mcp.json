@@ -16,7 +16,7 @@
         "--url",
         "https://mcp.context7.com/mcp",
         "--api-key",
-        "ctx7sk-8ca2edfc-dc97-4c9d-8b03-bdc427382dd3"
+        "${CONTEXT7_API_KEY}"
       ]
     }
   }

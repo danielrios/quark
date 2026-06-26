@@ -35,6 +35,10 @@ services:
       # Auth: set in .env or pass via CLI
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
 
+      # context7 MCP key — referenced by .mcp.json as ${CONTEXT7_API_KEY}.
+      # Never hardcode; set it in .env (gitignored) or the host environment.
+      - CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-}
+
       # Context optimization
       - BASH_MAX_OUTPUT_LENGTH=15000
 
