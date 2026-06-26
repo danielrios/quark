@@ -96,7 +96,7 @@ public class TelegramBotRunner {
                 String reply = dispatch(sessionId, incoming.text());
                 api.sendMessage(new SendMessage(chatId, TelegramMessages.clampToTelegramLimit(reply)));
             } else {
-                SendMessageResponse placeholder = api.sendMessage(new SendMessage(chatId, "…"));
+                SendMessageResponse placeholder = api.sendMessage(new SendMessage(chatId, "⏳ Thinking..."));
                 if (!placeholder.ok() || placeholder.result() == null) {
                     Log.warn("Failed to send placeholder for chatId=" + chatId);
                     return;
