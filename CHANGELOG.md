@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.4.0](https://github.com/danielrios/quark/compare/v0.3.0...v0.4.0) (2026-06-26)
+
+
+### Features
+
+* **chat:** add Multi&lt;String&gt; streamChat() to Assistant (verified: Gemini extension supports streaming) ([4310142](https://github.com/danielrios/quark/commit/4310142b84122dbc9bae8e34289e8747f2038792))
+* **telegram:** add streaming DTOs and editMessageText endpoint ([8d56d71](https://github.com/danielrios/quark/commit/8d56d718afa2335ee9aca64ef1b5e6d5233ed1cf))
+* **telegram:** change placeholder from '…' to '⏳ Thinking...' ([35edc1f](https://github.com/danielrios/quark/commit/35edc1f016156121a56cee56a272ab94995efaca))
+* **telegram:** Plan 3 — streaming replies via throttled message edits ([8d797fd](https://github.com/danielrios/quark/commit/8d797fdd53b3db5e2350c9e7fd5fae804268d21a))
+* **telegram:** route CHAT through streaming in handle(), keep dispatch() for tests ([f88c857](https://github.com/danielrios/quark/commit/f88c857372af501c1e685956df2d9691b3c1f5ef))
+* **telegram:** TelegramStreamHandler with throttled streaming loop (TDD, 4 tests) ([72403a3](https://github.com/danielrios/quark/commit/72403a3fba9a55664b78c326db0ca3ddf4487898))
+
+
+### Bug Fixes
+
+* **telegram:** apply clampToTelegramLimit consistently in error callback ([cb6ab71](https://github.com/danielrios/quark/commit/cb6ab71fdc6f3572ad9252ac09768e28018173b8))
+* **telegram:** guard placeholder NPE, restore clampToTelegramLimit on RESET path ([28ddb08](https://github.com/danielrios/quark/commit/28ddb08860e5f5f8b335850f65a651156c74909a))
+
+
+### Refactors
+
+* simplify streaming — ERR_FALLBACK constant, @SystemMessage at interface, AtomicLong, flushBuffer(), StringBuilder clamp overload ([6e93065](https://github.com/danielrios/quark/commit/6e9306579135d2ddad4484de9a372a815648e263))
+
 ## [0.3.0](https://github.com/danielrios/quark/compare/v0.2.0...v0.3.0) (2026-05-30)
 
 
