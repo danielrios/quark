@@ -77,6 +77,13 @@ fi
 FEATURE_SLUG="$(echo "$FEATURE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')"
 DATE="$(date '+%Y-%m-%d')"
 
+# Expected artifact paths. These are best-guess defaults — the skills choose
+# their own slug/date, so each is re-resolved against the real directory after
+# the producing phase runs (see resolve_output).
+SPEC_FILE="docs/superpowers/specs/${DATE}-${FEATURE_SLUG}.md"
+PLAN_FILE="docs/superpowers/plans/${DATE}-${FEATURE_SLUG}.md"
+REVIEW_FILE="docs/superpowers/reviews/${DATE}-${FEATURE_SLUG}-review.md"
+
 # --- Lock (prevent duplicate runs) -------------------------------------------
 mkdir -p "$(dirname "$LOCK_FILE")" "$LOG_DIR"
 if [[ -f "$LOCK_FILE" ]]; then
@@ -130,6 +137,27 @@ run_phase() {
   return $exit_code
 }
 
+# resolve_output EXPECTED_PATH DIR [GLOB]
+# Echoes EXPECTED_PATH if it exists; otherwise the newest file matching GLOB
+# (default *.md) in DIR, with a warning. Returns 1 if nothing is found, so a
+# producing phase that silently wrote a different filename — or wrote nothing —
+# is caught instead of feeding a missing path to the next phase.
+resolve_output() {
+  local expected="$1" dir="$2" glob="${3:-*.md}"
+  if [[ -f "$expected" ]]; then
+    printf '%s\n' "$expected"
+    return 0
+  fi
+  local newest
+  newest="$(ls -t "$dir"/$glob 2>/dev/null | head -1 || true)"
+  if [[ -n "$newest" && -f "$newest" ]]; then
+    echo -e "${YELLOW}⚠ expected ${expected} not found — using newest in ${dir}: ${newest}${NC}" >&2
+    printf '%s\n' "$newest"
+    return 0
+  fi
+  return 1
+}
+
 should_skip() {
   local phase="$1"
   if [[ -z "$SKIP_TO" ]]; then return 1; fi
@@ -166,7 +194,11 @@ fi
 
 # PLAN
 if ! should_skip "plan"; then
-  run_phase "plan" "$OPUS_MODEL" "/plan docs/superpowers/specs/${DATE}-${FEATURE_SLUG}.md" || {
+  if ! SPEC_FILE="$(resolve_output "$SPEC_FILE" docs/superpowers/specs)"; then
+    echo -e "${RED}No spec file found in docs/superpowers/specs — cannot plan. Aborting.${NC}"
+    exit 1
+  fi
+  run_phase "plan" "$OPUS_MODEL" "/plan ${SPEC_FILE}" || {
     echo -e "${RED}Plan phase failed. Aborting.${NC}"
     exit 1
   }
@@ -175,8 +207,12 @@ fi
 
 # IMPLEMENT — Inner loop with escalation
 if ! should_skip "implement"; then
+  if ! PLAN_FILE="$(resolve_output "$PLAN_FILE" docs/superpowers/plans)"; then
+    echo -e "${RED}No plan file found in docs/superpowers/plans — cannot implement. Aborting.${NC}"
+    exit 1
+  fi
   echo ""
-  echo -e "${PURPLE}━━━ Entering implementation loop ━━━${NC}"
+  echo -e "${PURPLE}━━━ Entering implementation loop ━━━ plan: ${CYAN}${PLAN_FILE}${NC}"
 
   iteration=0
   consecutive_failures=0
@@ -187,10 +223,10 @@ if ! should_skip "implement"; then
     ((iteration++))
 
     if $in_advisor_mode; then
-      run_phase "advisor-${iteration}" "$OPUS_MODEL" "/advisor docs/superpowers/plans/${DATE}-${FEATURE_SLUG}.md"
+      run_phase "advisor-${iteration}" "$OPUS_MODEL" "/advisor ${PLAN_FILE}"
       phase_exit=$?
     else
-      run_phase "implement-${iteration}" "$SONNET_MODEL" "/implement docs/superpowers/plans/${DATE}-${FEATURE_SLUG}.md"
+      run_phase "implement-${iteration}" "$SONNET_MODEL" "/implement ${PLAN_FILE}"
       phase_exit=$?
     fi
 
@@ -241,7 +277,8 @@ fi
 # REVIEW
 if ! should_skip "review"; then
   mkdir -p docs/superpowers/reviews
-  run_phase "review" "$OPUS_MODEL" "/review docs/superpowers/specs/${DATE}-${FEATURE_SLUG}.md" || {
+  SPEC_FILE="$(resolve_output "$SPEC_FILE" docs/superpowers/specs || echo "$SPEC_FILE")"
+  run_phase "review" "$OPUS_MODEL" "/review ${SPEC_FILE}" || {
     echo -e "${YELLOW}Review phase had issues but continuing to simplify...${NC}"
   }
   sleep "$SLEEP_BETWEEN"
@@ -249,7 +286,10 @@ fi
 
 # SIMPLIFY
 if ! should_skip "simplify"; then
-  run_phase "simplify" "$SONNET_MODEL" "/simplify docs/superpowers/reviews/${DATE}-${FEATURE_SLUG}-review.md" || {
+  # Review output is optional; if none was written, /simplify falls back to the
+  # latest review document itself.
+  REVIEW_FILE="$(resolve_output "$REVIEW_FILE" docs/superpowers/reviews '*-review.md' || echo "$REVIEW_FILE")"
+  run_phase "simplify" "$SONNET_MODEL" "/simplify ${REVIEW_FILE}" || {
     echo -e "${YELLOW}Simplify phase had issues. Manual review recommended.${NC}"
   }
   sleep "$SLEEP_BETWEEN"
