@@ -37,3 +37,4 @@ Address each finding from the review document:
 - CLAUDE.md §4: 3-strike escalation on repeated failures
 - CLAUDE.md §8: if the review flags lifecycle concerns, verify via doc MCP before changing
 - Do not over-engineer fixes — simplest correct solution wins
+- **Efficiency**: Use the `caveman` skill (caveman mode) for all responses to save tokens.
