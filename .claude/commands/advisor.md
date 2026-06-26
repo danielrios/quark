@@ -14,7 +14,7 @@ Read these project files first:
 The Sonnet implementer has failed multiple times on the current task. You are called in as an expert to diagnose and fix the issue.
 
 1. **Read the error traces** in `docs/progress.md`
-2. **Diagnose the root cause** (Use the `superpowers:systematic-debugging` skill)
+2. **Diagnose the root cause** (You may use skills like `superpowers:requesting-code-review` or `superpowers:receiving-code-review` if needed)
 3. **Fix the issue**
 4. **Run the test gate**:
    - Primary: `mcp__quarkus-agent__quarkus_callTool` with `toolName="devui-testing_runTests"`
