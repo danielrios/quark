@@ -100,6 +100,41 @@ environment and passed through by `docker-compose.claude.yml`. `.env.example`
 documents the required variables. An earlier revision of this branch committed a
 literal key — rotate any key that has ever been committed.
 
+### Launching the loop — `scripts/loop.sh`
+
+`docker compose` v2 is not guaranteed on the host (the dev machine had genuine
+Docker but no compose plugin). **`scripts/loop.sh` is the canonical launcher** —
+a plain `docker run` wrapper, no compose dependency:
+
+* `scripts/loop.sh run --feature "…"` — runs `orchestrate.sh` in the container
+* `scripts/loop.sh exec <cmd…>` — one-shot (used for the readiness smoke)
+* `scripts/loop.sh shell` — interactive debug
+
+`docker-compose.claude.yml` is kept in sync as a best-effort alternative for
+hosts that do have compose.
+
+### Propagating skills into the container (non-obvious)
+
+The loop's wrappers depend on `caveman`, `cavecrew`, and the Matt Pocock
+engineering skills (`domain-modeling`, `diagnosing-bugs`, `grilling`,
+`codebase-design`, …). Getting them to load inside the container took two fixes
+beyond mounting `~/.claude`:
+
+1. **Symlink targets.** `~/.claude/skills/*` are *relative symlinks* into
+   `~/.agents/skills/*`. Mounting only `~/.claude` leaves them dangling, so
+   `~/.agents` is mounted too.
+2. **Registration.** Personal skills are registered via `~/.claude.json`, not by
+   scanning the dir — with only the Dockerfile's minimal stub the skills stay
+   invisible even when the files are present and readable. `loop.sh` mounts an
+   *ephemeral copy* of the host `~/.claude.json` (with `/workspace` trust merged
+   in); the host file is never mutated.
+
+Verified via `scripts/loop.sh exec claude …`: all nine target skills report
+**Found**, and both `quarkus-agent` and `context7` MCPs connect in-container.
+Trade-off: mounting the full `~/.claude.json` also surfaces the user's other
+claude.ai connectors in the container — harmless for a local run, trim later if
+it matters.
+
 ## Alternatives considered
 
 1. **Single-model bash loop** — simpler, but no cross-model review and

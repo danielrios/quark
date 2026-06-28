@@ -1,8 +1,13 @@
 # =============================================================================
 # docker-compose.claude.yml — Claude Code multi-model loop environment
+#
+# NOTE: scripts/loop.sh is the canonical launcher (no compose dependency, and it
+# also propagates personal skills into the container — see ADR 0007). This file
+# is a best-effort alternative for hosts that have the docker compose v2 plugin;
+# it does NOT perform the ~/.claude.json skill-registration step loop.sh does.
+#
 # Usage:
-#   docker compose -f docker-compose.claude.yml build
-#   docker compose -f docker-compose.claude.yml run --rm claude-loop
+#   docker compose -f docker-compose.claude.yml build      # build the image
 #   docker compose -f docker-compose.claude.yml run --rm claude-loop \
 #     scripts/orchestrate.sh --feature "Plan 3 — Telegram streaming"
 # See: docs/adr/0007-multi-model-loop-harness.md
@@ -19,8 +24,13 @@ services:
       # Project source (read-write)
       - .:/workspace:z
 
-      # Persistent auth — mapped from host for seamless authentication
+      # Persistent auth + plugins + skill symlinks — mapped from host
       - ~/.claude:/home/claude/.claude:z
+
+      # Symlink targets for personal skills. ~/.claude/skills/* are relative
+      # symlinks into ~/.agents/skills/*; without this mount they dangle and
+      # caveman / cavecrew / Matt Pocock skills silently vanish in-container.
+      - ~/.agents:/home/claude/.agents:z
 
       # Gradle cache — avoids re-downloading deps every run
       - gradle-cache:/home/claude/.gradle
