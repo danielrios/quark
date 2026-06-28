@@ -9,15 +9,11 @@
       ]
     },
     "context7": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@context7/mcp-server",
-        "--url",
-        "https://mcp.context7.com/mcp",
-        "--api-key",
-        "${CONTEXT7_API_KEY}"
-      ]
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY:-}"
+      }
     }
   }
 }
