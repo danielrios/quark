@@ -8,8 +8,8 @@ current task pointer, session counter, last ~3 trajectory entries, and
 live stack traces.
 
 ## Current Task
-- Plan 2 — in-process working memory + `/reset` — **DONE** (commits `18bd893`–`8e8f5e8`, branch `worktree-plan-2-working-memory-reset`). Per-session memory via `@MemoryId` on an `@ApplicationScoped` `Assistant` (see [ADR 0006](adr/0006-application-scoped-ai-service-for-memory.md)); `/reset` clears session via `ChatMemoryStore.deleteMessages`. 26 tests, zero failures.
-- **Next: Plan 3 — Telegram streaming via throttled message edits** (ADR 0003); plan file not yet authored.
+- Plan 3 — Telegram streaming via throttled edits — **DONE** (merged via PR #22, release 0.4.0).
+- **In progress: Plan 4 — runtime extraction** (`AgentRuntime`, `AgentEvent`, `ModelGateway`, `ChatMemoryStore`) — plan file: [superpowers/plans/2026-07-03-plan-4-runtime-extraction.md](superpowers/plans/2026-07-03-plan-4-runtime-extraction.md), branch `plan-4-runtime-extraction`. Baseline gate 2026-07-03: `./gradlew test` → 32 tests, 0 failures, 0 errors.
 
 ## System State
 - Current Session Attempts: 0 / 3
