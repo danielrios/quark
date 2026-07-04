@@ -1,4 +1,4 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;

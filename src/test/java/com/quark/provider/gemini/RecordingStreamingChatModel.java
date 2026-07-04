@@ -1,4 +1,4 @@
-package com.quark.chat;
+package com.quark.provider.gemini;
 
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;

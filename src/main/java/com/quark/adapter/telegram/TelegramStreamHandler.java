@@ -1,9 +1,9 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
 import com.quark.core.AgentEvent;
 import com.quark.core.TurnRequest;
 import com.quark.runtime.AgentRuntime;
-import com.quark.telegram.TelegramMessages.EditMessageText;
+import com.quark.adapter.telegram.TelegramMessages.EditMessageText;
 import io.quarkus.logging.Log;
 import io.smallrye.mutiny.subscription.Cancellable;
 import jakarta.enterprise.context.ApplicationScoped;

@@ -1,9 +1,9 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
-import com.quark.telegram.TelegramMessages.EditMessageText;
-import com.quark.telegram.TelegramMessages.GetUpdatesResponse;
-import com.quark.telegram.TelegramMessages.SendMessage;
-import com.quark.telegram.TelegramMessages.SendMessageResponse;
+import com.quark.adapter.telegram.TelegramMessages.EditMessageText;
+import com.quark.adapter.telegram.TelegramMessages.GetUpdatesResponse;
+import com.quark.adapter.telegram.TelegramMessages.SendMessage;
+import com.quark.adapter.telegram.TelegramMessages.SendMessageResponse;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;

@@ -1,13 +1,13 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
 import com.quark.core.AgentEvent;
 import com.quark.core.TurnRequest;
 import com.quark.runtime.AgentRuntime;
-import com.quark.telegram.TelegramMessages.GetUpdatesResponse;
-import com.quark.telegram.TelegramMessages.IncomingText;
-import com.quark.telegram.TelegramMessages.SendMessage;
-import com.quark.telegram.TelegramMessages.SendMessageResponse;
-import com.quark.telegram.TelegramMessages.TelegramUpdate;
+import com.quark.adapter.telegram.TelegramMessages.GetUpdatesResponse;
+import com.quark.adapter.telegram.TelegramMessages.IncomingText;
+import com.quark.adapter.telegram.TelegramMessages.SendMessage;
+import com.quark.adapter.telegram.TelegramMessages.SendMessageResponse;
+import com.quark.adapter.telegram.TelegramMessages.TelegramUpdate;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.logging.Log;

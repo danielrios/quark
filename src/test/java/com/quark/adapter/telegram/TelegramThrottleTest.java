@@ -1,4 +1,4 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.quark.core.AgentEvent;
 import com.quark.runtime.AgentRuntime;
-import com.quark.telegram.TelegramMessages.EditMessageText;
+import com.quark.adapter.telegram.TelegramMessages.EditMessageText;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;

@@ -1,4 +1,4 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

@@ -1,9 +1,9 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.quark.chat.RecordingStreamingChatModel;
+import com.quark.provider.gemini.RecordingStreamingChatModel;
 import com.quark.core.AgentEvent;
 import com.quark.core.TurnRequest;
 import com.quark.memory.ChatMemoryStore;
