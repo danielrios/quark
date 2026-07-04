@@ -10,7 +10,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.quark.chat.Assistant;
+import com.quark.core.AgentEvent;
+import com.quark.runtime.AgentRuntime;
 import com.quark.telegram.TelegramMessages.EditMessageText;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -28,20 +29,25 @@ class TelegramStreamHandlerTest {
     TelegramStreamHandler handler;
 
     @InjectMock
-    Assistant mockAssistant;
+    AgentRuntime mockRuntime;
 
     @InjectMock
     @RestClient
     TelegramApi mockApi;
 
     /**
-     * With throttleMs=0, every token triggers an edit. The final onComplete flush also fires.
-     * The buffer must accumulate across all tokens so the last edit has the complete text.
+     * With throttleMs=0, every TokenEmitted event triggers an edit. The final flush on
+     * TurnCompleted also fires. The buffer must accumulate across all tokens so the last edit
+     * has the complete text.
      */
     @Test
     void tokensAccumulateAndFinalFlushHasCompleteBuffer() {
-        when(mockAssistant.streamChat(any(), any()))
-            .thenReturn(Multi.createFrom().items("Hello", " ", "World"));
+        when(mockRuntime.execute(any())).thenReturn(Multi.createFrom().iterable(java.util.List.<AgentEvent>of(
+            new AgentEvent.TokenEmitted("t1", "Hello"),
+            new AgentEvent.TokenEmitted("t1", " "),
+            new AgentEvent.TokenEmitted("t1", "World"),
+            new AgentEvent.ModelCompleted("t1"),
+            new AgentEvent.TurnCompleted("t1", "Hello World"))));
 
         handler.stream(100L, 42L, "sess", "hello");
 
@@ -57,13 +63,16 @@ class TelegramStreamHandlerTest {
     }
 
     /**
-     * A mid-stream editMessageText failure must be swallowed. The stream must complete and
-     * the final flush in onComplete must still fire with the full accumulated buffer.
+     * A mid-stream editMessageText failure must be swallowed. The event stream must complete and
+     * the final flush on TurnCompleted must still fire with the full accumulated buffer.
      */
     @Test
     void midStreamEditFailureIsSwallowedAndStreamCompletes() {
-        when(mockAssistant.streamChat(any(), any()))
-            .thenReturn(Multi.createFrom().items("tok1", "tok2"));
+        when(mockRuntime.execute(any())).thenReturn(Multi.createFrom().iterable(java.util.List.<AgentEvent>of(
+            new AgentEvent.TokenEmitted("t1", "tok1"),
+            new AgentEvent.TokenEmitted("t1", "tok2"),
+            new AgentEvent.ModelCompleted("t1"),
+            new AgentEvent.TurnCompleted("t1", "tok1tok2"))));
         doThrow(new RuntimeException("429 rate limit"))
             .doNothing()
             .doNothing()
@@ -80,13 +89,14 @@ class TelegramStreamHandlerTest {
     }
 
     /**
-     * When the stream itself fails (auth error, timeout, etc.), the placeholder message
-     * must be replaced with "Something went wrong." — not left as "…".
+     * When the turn fails (auth error, timeout, etc.), it arrives as a single TurnFailed event
+     * — not a Multi failure — and the placeholder message must be replaced with
+     * "Something went wrong." — not left as "…".
      */
     @Test
     void streamErrorReplacesMessageWithErrorText() {
-        when(mockAssistant.streamChat(any(), any()))
-            .thenReturn(Multi.createFrom().failure(new RuntimeException("auth error")));
+        when(mockRuntime.execute(any())).thenReturn(Multi.createFrom().iterable(java.util.List.<AgentEvent>of(
+            new AgentEvent.TurnFailed("t1", "auth error"))));
 
         handler.stream(100L, 42L, "sess", "hello");
 
@@ -102,8 +112,10 @@ class TelegramStreamHandlerTest {
     @Test
     void bufferIsClamped() {
         String bigToken = "x".repeat(5000);
-        when(mockAssistant.streamChat(any(), any()))
-            .thenReturn(Multi.createFrom().items(bigToken));
+        when(mockRuntime.execute(any())).thenReturn(Multi.createFrom().iterable(java.util.List.<AgentEvent>of(
+            new AgentEvent.TokenEmitted("t1", bigToken),
+            new AgentEvent.ModelCompleted("t1"),
+            new AgentEvent.TurnCompleted("t1", bigToken))));
 
         handler.stream(100L, 42L, "sess", "hello");
 

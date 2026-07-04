@@ -3,11 +3,10 @@ package com.quark.telegram;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import com.quark.core.ChatMessage;
+import com.quark.memory.ChatMemoryStore;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
-import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -22,20 +21,20 @@ class TelegramBotRunnerResetTest {
 
     @AfterEach
     void cleanStore() {
-        store.deleteMessages("9991");
-        store.deleteMessages("1001");
-        store.deleteMessages("1002");
+        store.delete("9991");
+        store.delete("1001");
+        store.delete("1002");
     }
 
     @Test
     void resetClearsSessionMemoryAndConfirms() {
         String sessionId = "9991";
-        store.updateMessages(sessionId, List.of(UserMessage.from("remember this")));
-        assertFalse(store.getMessages(sessionId).isEmpty(), "precondition: session has history");
+        store.append(sessionId, new ChatMessage(ChatMessage.Role.USER, "remember this"));
+        assertFalse(store.load(sessionId).isEmpty(), "precondition: session has history");
 
         String reply = runner.dispatch(sessionId, "/reset");
 
-        assertTrue(store.getMessages(sessionId).isEmpty(), "/reset must clear the session");
+        assertTrue(store.load(sessionId).isEmpty(), "/reset must clear the session");
         assertTrue(reply.toLowerCase().contains("cleared"), "user must be told memory was cleared");
     }
 
@@ -43,12 +42,12 @@ class TelegramBotRunnerResetTest {
     void resetOnlyAffectsTheTargetSession() {
         String target = "1001";
         String other = "1002";
-        store.updateMessages(target, List.of(UserMessage.from("target msg")));
-        store.updateMessages(other, List.of(UserMessage.from("other msg")));
+        store.append(target, new ChatMessage(ChatMessage.Role.USER, "target msg"));
+        store.append(other, new ChatMessage(ChatMessage.Role.USER, "other msg"));
 
         runner.dispatch(target, "/reset");
 
-        assertTrue(store.getMessages(target).isEmpty(), "target session cleared");
-        assertFalse(store.getMessages(other).isEmpty(), "other session untouched");
+        assertTrue(store.load(target).isEmpty(), "target session cleared");
+        assertFalse(store.load(other).isEmpty(), "other session untouched");
     }
 }

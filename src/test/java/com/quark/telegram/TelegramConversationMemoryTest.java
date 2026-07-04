@@ -4,10 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.quark.chat.RecordingChatModel;
+import com.quark.chat.RecordingStreamingChatModel;
+import com.quark.memory.ChatMemoryStore;
 import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.test.junit.QuarkusMock;
@@ -19,22 +19,27 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * End-to-end test of the real memory pipeline:
- * {@code TelegramBotRunner.dispatch} → {@code Assistant.chat} → {@code ChatMemoryProvider}
- * → {@code ChatMemoryStore}, driven exactly as the Telegram poller drives it.
+ * End-to-end guard of the real memory pipeline: {@code TelegramBotRunner.dispatch} →
+ * {@code AgentRuntime.execute} → {@code GeminiModelGateway} → {@code StreamingChatModel}, driven
+ * exactly as the Telegram poller drives it.
  *
  * <p>Each simulated Telegram update runs inside its own activated-then-terminated CDI request
- * context (mirroring {@code TelegramBotRunner.handle()}). A {@link RecordingChatModel} replaces
- * Gemini via {@code QuarkusMock.installMockForType} and captures the message list the AI service
- * actually sends, so we can prove the second turn carries the first turn's history — the real
- * meaning of "memory persists across requests."
+ * context (mirroring {@code TelegramBotRunner.handle()}). A {@link RecordingStreamingChatModel}
+ * replaces Gemini via {@code QuarkusMock.installMockForType} and captures the message list the
+ * runtime actually sends, so we can prove the second turn carries the first turn's history — the
+ * real meaning of "memory persists across requests."
  *
  * <p>This guards the root cause found while debugging PR #14: with a {@code @RequestScoped} AI
- * service (the quarkus-langchain4j default), the generated service bean's {@code @PreDestroy} runs
+ * service (the quarkus-langchain4j default), the generated service bean's {@code @PreDestroy} ran
  * at request-context termination → {@code ChatMemoryService.clearAll()} → {@code ChatMemory.clear()}
  * → {@code ChatMemoryStore.deleteMessages(sessionId)}, wiping the session at the end of every
- * update. Only an {@code @ApplicationScoped Assistant} (isolated by an explicit {@code @MemoryId})
- * survives that. If someone reverts the scope, {@link #secondTurnSeesFirstTurnHistory()} fails.
+ * update (ADR 0006). After ADR 0007 that {@code @RequestScoped} AI service is retired entirely;
+ * this test now proves the runtime-owned {@code ChatMemoryStore} persists sessions across request
+ * contexts on its own, and that {@code /reset} clears exactly one session without a model call. If
+ * someone regresses that ownership, {@link #secondTurnSeesFirstTurnHistory()} fails.
+ *
+ * <p>This is the CLAUDE.md §8 CI backstop and must keep this altitude — a real per-update request
+ * context, not a mocked scope — or it stops proving anything about lifecycle.
  */
 @QuarkusTest
 class TelegramConversationMemoryTest {
@@ -45,7 +50,7 @@ class TelegramConversationMemoryTest {
     @Inject
     ChatMemoryStore store;
 
-    private final RecordingChatModel model = new RecordingChatModel();
+    private final RecordingStreamingChatModel model = new RecordingStreamingChatModel();
 
     private static final String SESSION = "conv-42";
     private static final String OTHER = "conv-99";
@@ -53,13 +58,13 @@ class TelegramConversationMemoryTest {
     @BeforeEach
     void installFakeModel() {
         model.receivedTurns.clear();
-        QuarkusMock.installMockForType(model, ChatModel.class);
+        QuarkusMock.installMockForType(model, StreamingChatModel.class);
     }
 
     @AfterEach
     void cleanStore() {
-        store.deleteMessages(SESSION);
-        store.deleteMessages(OTHER);
+        store.delete(SESSION);
+        store.delete(OTHER);
     }
 
     /** Runs one dispatch in its own request context, like a single Telegram update. */

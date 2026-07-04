@@ -33,6 +33,11 @@ import java.util.UUID;
  * <p>{@link #execute(TurnRequest)} returns a cold {@link Multi}: each subscription re-runs the
  * whole turn, and all per-turn state (the turn id, the accumulator) lives inside the {@code
  * deferred} supplier, so concurrent subscriptions never share state.
+ *
+ * <p>At a saturated session the prompt carries the full stored window <em>plus</em> the pending
+ * user message (window+1 conversation messages) — intended: the store bounds persisted history,
+ * eviction catches up on the post-turn appends. (Plan 2's MessageWindowChatMemory counted the
+ * pending message inside the window; the one-message difference is accepted.)
  */
 @ApplicationScoped
 public class AgentRuntime {
