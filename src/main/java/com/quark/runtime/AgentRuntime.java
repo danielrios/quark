@@ -1,0 +1,108 @@
+package com.quark.runtime;
+
+import com.quark.core.AgentEvent;
+import com.quark.core.ChatMessage;
+import com.quark.core.TurnRequest;
+import com.quark.memory.ChatMemoryStore;
+import com.quark.provider.ModelGateway;
+import io.quarkus.logging.Log;
+import io.smallrye.mutiny.Multi;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * The single orchestration point for an agent turn (ADR 0001).
+ *
+ * <p>{@link #execute(TurnRequest)} loads conversation history, emits {@link
+ * AgentEvent.TurnStarted}, {@link AgentEvent.MemoryLoaded}, and {@link AgentEvent.ModelInvoked},
+ * then streams the {@link ModelGateway} token-by-token as {@link AgentEvent.TokenEmitted} while
+ * accumulating the full response text. On success, both the user and assistant messages are
+ * persisted to the {@link ChatMemoryStore} and the stream ends with {@link
+ * AgentEvent.ModelCompleted} followed by the terminal {@link AgentEvent.TurnCompleted}.
+ *
+ * <p>Any failure — before or during model invocation — becomes exactly one terminal {@link
+ * AgentEvent.TurnFailed} event, and the {@link Multi} completes normally afterward; failures are
+ * events, not {@code onError()}. Nothing is persisted on a failed or cancelled turn — a
+ * deliberate deviation from the retired AI-service behavior (ADR 0007). One caveat: the two
+ * persistence appends are not atomic, so a store whose ASSISTANT append throws can leave an
+ * orphan USER message behind (unreachable with {@code InMemoryChatMemoryStore}).
+ *
+ * <p>{@link #execute(TurnRequest)} returns a cold {@link Multi}: each subscription re-runs the
+ * whole turn, and all per-turn state (the turn id, the accumulator) lives inside the {@code
+ * deferred} supplier, so concurrent subscriptions never share state.
+ */
+@ApplicationScoped
+public class AgentRuntime {
+
+    static final String SYSTEM_PROMPT =
+            "You are quark, a concise and helpful assistant. Answer in plain text.";
+
+    private final ChatMemoryStore memory;
+    private final ModelGateway gateway;
+
+    @Inject
+    public AgentRuntime(ChatMemoryStore memory, ModelGateway gateway) {
+        this.memory = memory;
+        this.gateway = gateway;
+    }
+
+    public Multi<AgentEvent> execute(TurnRequest request) {
+        return Multi.createFrom().deferred(() -> {
+            String turnId = UUID.randomUUID().toString();
+            String sessionId = request.sessionId();
+            Log.info("turn " + turnId + " started (session " + sessionId + ")");
+            try {
+                List<ChatMessage> history = memory.load(sessionId);
+
+                List<ChatMessage> prompt = new ArrayList<>();
+                prompt.add(new ChatMessage(ChatMessage.Role.SYSTEM, SYSTEM_PROMPT));
+                prompt.addAll(history);
+                ChatMessage userMessage = new ChatMessage(ChatMessage.Role.USER, request.message());
+                prompt.add(userMessage);
+
+                StringBuilder accumulated = new StringBuilder();
+
+                Multi<AgentEvent> head = Multi.createFrom().items(
+                        new AgentEvent.TurnStarted(turnId, sessionId),
+                        new AgentEvent.MemoryLoaded(turnId, history.size()),
+                        new AgentEvent.ModelInvoked(turnId));
+
+                Multi<AgentEvent> tokens = gateway.stream(List.copyOf(prompt))
+                        .onItem().invoke(accumulated::append)
+                        .onItem().transform(chunk -> (AgentEvent) new AgentEvent.TokenEmitted(turnId, chunk));
+
+                Multi<AgentEvent> tail = Multi.createFrom().deferred(() -> {
+                    String text = accumulated.toString();
+                    memory.append(sessionId, userMessage);
+                    memory.append(sessionId, new ChatMessage(ChatMessage.Role.ASSISTANT, text));
+                    Log.info("turn " + turnId + " completed (" + text.length() + " chars)");
+                    return Multi.createFrom().items(
+                            new AgentEvent.ModelCompleted(turnId),
+                            new AgentEvent.TurnCompleted(turnId, text));
+                });
+
+                return Multi.createBy().concatenating().streams(head, tokens, tail)
+                        .onFailure().recoverWithItem(failure -> {
+                            Log.error("turn " + turnId + " failed", failure);
+                            return (AgentEvent) new AgentEvent.TurnFailed(turnId, String.valueOf(failure));
+                        });
+            } catch (Exception e) {
+                Log.error("turn " + turnId + " failed before model invocation", e);
+                return Multi.createFrom().items(
+                        new AgentEvent.TurnStarted(turnId, sessionId),
+                        new AgentEvent.TurnFailed(turnId, String.valueOf(e)));
+            }
+        });
+    }
+
+    /**
+     * Drops all conversation memory for {@code sessionId} — the {@code /reset} path. Lives on
+     * the runtime because adapters may not touch chat memory directly (ADR 0002 boundaries).
+     */
+    public void reset(String sessionId) {
+        memory.delete(sessionId);
+    }
+}
