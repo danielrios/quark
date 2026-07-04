@@ -1,6 +1,6 @@
 # 0006 — `@ApplicationScoped` AI service for cross-request conversation memory
 
-**Status:** Accepted, 2026-05-30.
+**Status:** Superseded in part by [ADR 0007](0007-agent-runtime-owns-conversation-memory.md), 2026-07-04 — the `@RegisterAiService` bean this ADR governs was retired in Plan 4; the invariant it established (application-scoped memory + explicit per-call session id) carries forward there. The Context section stays authoritative for the AI-service scope trap. Originally accepted 2026-05-30.
 **Deciders:** Daniel + debugging session (PR #14 review).
 
 **Related documents:**
