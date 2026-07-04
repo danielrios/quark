@@ -3,15 +3,19 @@
 Three states live in this document, and they are deliberately
 different:
 
-* **Bootstrap state (right now)** — a generated Quarkus skeleton.
-  Almost no application code.
-* **MVP target (Plans 1–3)** — the conversational runtime shape.
-  A flat module, direct provider calls, string streaming. Small enough
-  to hold in your head.
-* **Destination (Plans 4–7+)** — the event-driven runtime. Layered
-  packages, `AgentRuntime` orchestration, typed `Multi<AgentEvent>`
-  stream. Designed to support tools, planning, reflection, and
-  multi-provider orchestration without rewriting the core.
+* **Bootstrap state (historical)** — a generated Quarkus skeleton.
+  Superseded by Plans 1–4; kept for the record.
+* **MVP target (Plans 1–3, landed)** — the conversational runtime
+  shape: one flat module, direct provider calls, string streaming.
+  Shipped as Telegram polling + Gemini (Plan 1), bounded per-session
+  memory + `/reset` (Plan 2), streaming via throttled edits (Plan 3).
+* **Destination (Plans 4–7+) — core seams landed in Plan 4.** The
+  event-driven runtime: layered packages, `AgentRuntime` orchestration,
+  typed `Multi<AgentEvent>` stream. As of Plan 4 the `core`, `runtime`,
+  `memory`, `provider.gemini`, and `adapter.telegram` packages below
+  exist and carry production traffic (see [ADR 0007](docs/adr/0007-agent-runtime-owns-conversation-memory.md));
+  Plans 5–7 add the NIM provider, the REST/SSE adapter, and
+  ArchUnit + Micrometer enforcement.
 
 [ADR 0003](docs/adr/0003-walking-skeleton-first-plan-sequencing.md)
 explains why the project ships the first one before reaching for the
@@ -138,12 +142,13 @@ ADRs and arrives with the runtime refactor.
 
 # Destination — the event-driven runtime
 
-This is where the codebase is headed, **not** what it looks like today.
-The design is documented for two reasons:
-
-1. So the MVP code can be shaped to refactor cleanly into it later.
-2. So that contributors reading the ADRs do not mistake them for the
-   current state of the repository.
+**Status (Plan 4, 2026-07-04):** the core of this section is now real.
+`AgentRuntime.execute(TurnRequest) : Multi<AgentEvent>` orchestrates
+every Telegram turn; memory goes through the `ChatMemoryStore` SPI
+(runtime-owned, ADR 0007); Gemini sits behind `ModelGateway` in the only
+langchain4j-touching package. Still pending: `ProviderPreferenceStore` +
+NIM (Plan 5), the REST/SSE adapter and `config/` wiring package
+(Plan 6), ArchUnit enforcement + Micrometer (Plan 7).
 
 ## Pipeline
 
@@ -243,15 +248,15 @@ build on violation.
 The MVP and the destination are connected by an explicit plan sequence
 in [ADR 0003](docs/adr/0003-walking-skeleton-first-plan-sequencing.md):
 
-| Plan | What lands                                                    | Abstractions introduced                                |
-|------|---------------------------------------------------------------|--------------------------------------------------------|
-| 1    | Telegram polling + Gemini, one message in / one message out  | None. `@RegisterAiService` directly.                   |
-| 2    | In-process working memory + `/reset`                          | None. Memory on the dispatcher.                        |
-| 3    | Telegram streaming via throttled edits                        | None. Streaming stays Telegram-specific.               |
-| 4    | Extract `AgentRuntime`, `AgentEvent`, `ModelGateway`, `ChatMemoryStore` | Core runtime seams.                                    |
-| 5    | NIM provider + `/provider` + `/status`                        | `ProviderPreferenceStore` + second gateway.            |
-| 6    | REST + SSE adapter                                            | Second transport validates the event stream.           |
-| 7    | ArchUnit boundaries + Micrometer observability                | Structural enforcement + operational visibility.       |
+| Plan | Status | What lands                                                    | Abstractions introduced                                |
+|------|--------|---------------------------------------------------------------|--------------------------------------------------------|
+| 1    | ✅ landed | Telegram polling + Gemini, one message in / one message out  | None. `@RegisterAiService` directly.                   |
+| 2    | ✅ landed | In-process working memory + `/reset`                          | None. Memory on the AI service (ADR 0006).             |
+| 3    | ✅ landed (PR #22) | Telegram streaming via throttled edits                        | None. Streaming stays Telegram-specific.               |
+| 4    | ✅ landed (ADR 0007) | Extract `AgentRuntime`, `AgentEvent`, `ModelGateway`, `ChatMemoryStore`; retire the AI service; layered packages | Core runtime seams.                                    |
+| 5    | next | NIM provider + `/provider` + `/status`                        | `ProviderPreferenceStore` + second gateway.            |
+| 6    | pending | REST + SSE adapter                                            | Second transport validates the event stream.           |
+| 7    | pending | ArchUnit boundaries + Micrometer observability                | Structural enforcement + operational visibility.       |
 
 Plan 4 is the architectural inflection point. By the time it lands,
 Plans 1–3 have produced enough real behaviour (memory, streaming,

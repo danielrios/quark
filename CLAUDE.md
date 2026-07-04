@@ -21,7 +21,7 @@ introducing any runtime abstraction.
 ## 1. System Environment & Stack
 
 - **Stack:** Java 25, Quarkus 3.35.4, Gradle Kotlin DSL (`./gradlew`), `quarkus-langchain4j-core` via Quarkiverse.
-- **Package root:** `com.quark`. Package layout stays flat (`chat`, `telegram`, `rest`, `config`, `shared`) until ADR 0003's refactor phase.
+- **Package root:** `com.quark`. Layered layout since Plan 4 (ADR 0003's refactor phase): `core` / `runtime` / `memory` / `provider.gemini` / `adapter.telegram`. Respect the ADR 0002 boundary table (e.g. adapters never import `provider.*` or langchain4j); ArchUnit enforcement arrives in Plan 7.
 - **Style:** idiomatic Quarkus/CDI; virtual threads are first-class.
 - **Dev mode:** never run `./gradlew quarkusDev` (or any `quarkus:dev`) in the foreground — drive dev mode through the `quarkus-agent` MCP.
 
