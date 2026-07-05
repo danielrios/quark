@@ -85,9 +85,10 @@ public class AgentRuntime {
                 Multi<AgentEvent> tail = Multi.createFrom().deferred(() -> {
                     String text = accumulated.toString();
                     if (text.isBlank()) {
-                        // Degenerate zero-token completion: renderers show the error fallback,
-                        // so memory must agree the turn did not happen — persisting the pair
-                        // would replay an empty assistant message and double a resent question.
+                        // Blank completion (zero tokens or whitespace-only): renderers show the
+                        // error fallback, so memory must agree the turn did not happen —
+                        // persisting the pair would replay an empty assistant message and
+                        // double a resent question.
                         Log.warn("turn " + turnId + " completed blank — nothing persisted");
                     } else {
                         memory.append(sessionId, userMessage);
