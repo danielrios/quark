@@ -77,15 +77,19 @@ ADR 0006 governs). Per §8, the documented contract was checked **before** delet
   `max-messages`; the in-flight prompt adds the pending user message on top. Plan 2's
   `MessageWindowChatMemory` counted the pending message inside the window. The
   one-message difference is accepted and documented in the runtime javadoc.
-- **Blank completions persist nothing.** A zero-token model completion still emits
-  `ModelCompleted` + `TurnCompleted("")`, but neither the user nor the (empty)
-  assistant message is persisted: renderers surface the error fallback for such
-  turns, so memory agrees the turn did not happen — a resend does not double the
-  user message, and no empty assistant message is replayed into later prompts.
-  (langchain4j's AiServices persisted empty replies.)
+- **Blank completions persist nothing.** A blank (zero-token *or* whitespace-only)
+  model completion still emits `ModelCompleted` + `TurnCompleted`, but neither the
+  user nor the assistant message is persisted: renderers use the same `isBlank()`
+  predicate to surface their error fallback, so memory agrees the turn did not
+  happen — a resend does not double the user message, and no empty assistant
+  message is replayed into later prompts. (langchain4j's AiServices persisted
+  empty replies.) One accepted residual window: a turn that completes in the
+  instant between the Telegram handler's 60 s timeout firing and its cancel
+  taking effect persists normally while the user sees the fallback.
 - **`TurnFailed.reason` is message-only.** Exception class names never enter the
-  event stream (Plan 6 serializes it to external SSE clients); full stack traces
-  stay in the log, correlated by `turnId`.
+  event stream (Plan 6 serializes it to external SSE clients); a null/blank
+  message becomes the constant `"internal error"`; full stack traces stay in the
+  log, correlated by `turnId`.
 
 ## Consequences
 
@@ -101,4 +105,7 @@ ADR 0006 governs). Per §8, the documented contract was checked **before** delet
 - A persistent/shared `ChatMemoryStore` implementation (multi-instance deployment).
 - Concurrent adapters (Plan 6 REST/SSE): same-session `load`-during-`append` snapshot
   race documented in `InMemoryChatMemoryStore`.
+- Plan 6 SSE serialization of `TurnFailed.reason`: the message text can be a raw
+  provider response body (e.g. langchain4j `HttpException`) — decide there whether
+  it is safe verbatim for external clients or needs a sanitizing map.
 - Any desire to persist user messages on failed turns (product decision, not a bug).

@@ -106,6 +106,44 @@ class TelegramStreamHandlerTest {
     }
 
     /**
+     * A whitespace-only completion (a real Gemini stop mode) must surface the error fallback,
+     * never a whitespace edit: Telegram rejects empty-text edits with a 400, tryEdit swallows
+     * it, and the user would be stranded on the "Thinking..." placeholder. This pins the
+     * renderer half of the ADR 0007 blank-turn invariant (the runtime half skips persistence).
+     */
+    @Test
+    void whitespaceOnlyCompletionReplacesPlaceholderWithFallback() {
+        when(mockRuntime.execute(any())).thenReturn(Multi.createFrom().iterable(java.util.List.<AgentEvent>of(
+            new AgentEvent.TokenEmitted("t1", "\n"),
+            new AgentEvent.ModelCompleted("t1"),
+            new AgentEvent.TurnCompleted("t1", "\n"))));
+
+        handler.stream(100L, 42L, "sess", "hello");
+
+        ArgumentCaptor<EditMessageText> captor = ArgumentCaptor.forClass(EditMessageText.class);
+        // The whitespace throttled edit must be skipped entirely; only the fallback fires.
+        verify(mockApi, times(1)).editMessageText(captor.capture());
+        assertEquals(TelegramMessages.ERR_FALLBACK, captor.getValue().text());
+    }
+
+    /**
+     * A zero-token completion (no TokenEmitted at all) must likewise replace the placeholder
+     * with the error fallback instead of attempting an empty edit.
+     */
+    @Test
+    void zeroTokenCompletionReplacesPlaceholderWithFallback() {
+        when(mockRuntime.execute(any())).thenReturn(Multi.createFrom().iterable(java.util.List.<AgentEvent>of(
+            new AgentEvent.ModelCompleted("t1"),
+            new AgentEvent.TurnCompleted("t1", ""))));
+
+        handler.stream(100L, 42L, "sess", "hello");
+
+        ArgumentCaptor<EditMessageText> captor = ArgumentCaptor.forClass(EditMessageText.class);
+        verify(mockApi, times(1)).editMessageText(captor.capture());
+        assertEquals(TelegramMessages.ERR_FALLBACK, captor.getValue().text());
+    }
+
+    /**
      * When accumulated tokens exceed 4096 chars, every editMessageText call must receive
      * clamped text of at most 4096 characters (matching Telegram's hard limit).
      */

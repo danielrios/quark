@@ -22,6 +22,9 @@ import java.util.UUID;
  * accumulating the full response text. On success, both the user and assistant messages are
  * persisted to the {@link ChatMemoryStore} and the stream ends with {@link
  * AgentEvent.ModelCompleted} followed by the terminal {@link AgentEvent.TurnCompleted}.
+ * Exception: a <em>blank</em> completion (zero tokens or whitespace-only) persists nothing —
+ * renderers surface their error fallback for such turns, and memory agrees the turn did not
+ * happen (ADR 0007).
  *
  * <p>Any failure — before or during model invocation — becomes exactly one terminal {@link
  * AgentEvent.TurnFailed} event, and the {@link Multi} completes normally afterward; failures are
@@ -121,12 +124,11 @@ public class AgentRuntime {
     /**
      * Human-readable failure reason for {@link AgentEvent.TurnFailed}. Message-only — exception
      * class names never enter the event stream, which Plan 6 will serialize to external SSE
-     * clients. The full stack trace stays in the log beside the {@code turnId}.
+     * clients; a null or blank message falls back to a constant. The full stack trace stays in
+     * the log beside the {@code turnId}.
      */
     private static String reason(Throwable failure) {
         String message = failure.getMessage();
-        return (message == null || message.isBlank())
-                ? failure.getClass().getSimpleName()
-                : message;
+        return (message == null || message.isBlank()) ? "internal error" : message;
     }
 }

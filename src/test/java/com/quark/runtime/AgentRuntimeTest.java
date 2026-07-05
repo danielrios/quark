@@ -339,4 +339,24 @@ class AgentRuntimeTest {
                 "a blank completion must persist nothing — the renderer shows the error"
                         + " fallback, and memory must agree the turn did not happen");
     }
+
+    @Test
+    void whitespaceOnlyCompletionPersistsNothing() {
+        var store = new FakeStore();
+        var gateway = new FakeGateway(Multi.createFrom().items(" ", "\n"));
+        var runtime = new AgentRuntime(store, gateway);
+
+        List<AgentEvent> events =
+                runtime.execute(TurnRequest.of("s1", "hi"))
+                        .collect()
+                        .asList()
+                        .await()
+                        .atMost(Duration.ofSeconds(5));
+
+        var completed = assertInstanceOf(AgentEvent.TurnCompleted.class, events.get(events.size() - 1));
+        assertEquals(" \n", completed.text());
+        assertTrue(
+                store.appended.isEmpty(),
+                "whitespace-only completions are blank turns — same rule as zero-token");
+    }
 }

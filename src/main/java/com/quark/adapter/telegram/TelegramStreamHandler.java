@@ -59,10 +59,13 @@ public class TelegramStreamHandler {
                         }
                     } else if (event instanceof AgentEvent.TurnFailed) {
                         tryEdit(chatId, messageId, TelegramMessages.ERR_FALLBACK);
-                    } else if (event instanceof AgentEvent.TurnCompleted) {
-                        if (buffer.isEmpty()) {
-                            // Zero-token turn: Telegram rejects empty edits, which would leave
-                            // the placeholder stuck on "Thinking..." — surface the fallback.
+                    } else if (event instanceof AgentEvent.TurnCompleted completed) {
+                        if (completed.text().isBlank()) {
+                            // Blank turn (zero tokens OR whitespace-only — a real Gemini stop
+                            // mode): Telegram rejects empty-text edits, which would strand the
+                            // placeholder on "Thinking..." — surface the fallback. Same
+                            // isBlank() predicate as the runtime's persistence skip (ADR 0007),
+                            // so memory and rendering agree the turn did not happen.
                             tryEdit(chatId, messageId, TelegramMessages.ERR_FALLBACK);
                         } else {
                             flushBuffer(chatId, messageId, buffer);
@@ -92,7 +95,13 @@ public class TelegramStreamHandler {
     }
 
     private void flushBuffer(long chatId, long messageId, StringBuilder buffer) {
-        tryEdit(chatId, messageId, TelegramMessages.clampToTelegramLimit(buffer));
+        String text = TelegramMessages.clampToTelegramLimit(buffer);
+        if (text.isBlank()) {
+            // Telegram 400s on empty-text edits; a blank mid-stream buffer just waits for
+            // real tokens (or for the TurnCompleted fallback).
+            return;
+        }
+        tryEdit(chatId, messageId, text);
     }
 
     private void tryEdit(long chatId, long messageId, String text) {

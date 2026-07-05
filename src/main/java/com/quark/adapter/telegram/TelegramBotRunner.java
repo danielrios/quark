@@ -127,7 +127,8 @@ public class TelegramBotRunner {
         try {
             AgentEvent last = runtime.execute(TurnRequest.of(sessionId, userMessage))
                     .collect().last().await().atMost(Duration.ofSeconds(60));
-            return (last instanceof AgentEvent.TurnCompleted completed)
+            return (last instanceof AgentEvent.TurnCompleted completed
+                            && !completed.text().isBlank())
                     ? completed.text()
                     : TelegramMessages.ERR_FALLBACK;
         } catch (Exception e) {
