@@ -81,8 +81,15 @@ public class AgentRuntime {
 
                 Multi<AgentEvent> tail = Multi.createFrom().deferred(() -> {
                     String text = accumulated.toString();
-                    memory.append(sessionId, userMessage);
-                    memory.append(sessionId, new ChatMessage(ChatMessage.Role.ASSISTANT, text));
+                    if (text.isBlank()) {
+                        // Degenerate zero-token completion: renderers show the error fallback,
+                        // so memory must agree the turn did not happen — persisting the pair
+                        // would replay an empty assistant message and double a resent question.
+                        Log.warn("turn " + turnId + " completed blank — nothing persisted");
+                    } else {
+                        memory.append(sessionId, userMessage);
+                        memory.append(sessionId, new ChatMessage(ChatMessage.Role.ASSISTANT, text));
+                    }
                     Log.info("turn " + turnId + " completed (" + text.length() + " chars)");
                     return Multi.createFrom().items(
                             new AgentEvent.ModelCompleted(turnId),
@@ -92,13 +99,13 @@ public class AgentRuntime {
                 return Multi.createBy().concatenating().streams(head, tokens, tail)
                         .onFailure().recoverWithItem(failure -> {
                             Log.error("turn " + turnId + " failed", failure);
-                            return (AgentEvent) new AgentEvent.TurnFailed(turnId, String.valueOf(failure));
+                            return (AgentEvent) new AgentEvent.TurnFailed(turnId, reason(failure));
                         });
             } catch (Exception e) {
                 Log.error("turn " + turnId + " failed before model invocation", e);
                 return Multi.createFrom().items(
                         new AgentEvent.TurnStarted(turnId, sessionId),
-                        new AgentEvent.TurnFailed(turnId, String.valueOf(e)));
+                        new AgentEvent.TurnFailed(turnId, reason(e)));
             }
         });
     }
@@ -109,5 +116,17 @@ public class AgentRuntime {
      */
     public void reset(String sessionId) {
         memory.delete(sessionId);
+    }
+
+    /**
+     * Human-readable failure reason for {@link AgentEvent.TurnFailed}. Message-only — exception
+     * class names never enter the event stream, which Plan 6 will serialize to external SSE
+     * clients. The full stack trace stays in the log beside the {@code turnId}.
+     */
+    private static String reason(Throwable failure) {
+        String message = failure.getMessage();
+        return (message == null || message.isBlank())
+                ? failure.getClass().getSimpleName()
+                : message;
     }
 }

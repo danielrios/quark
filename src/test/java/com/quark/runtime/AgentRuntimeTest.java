@@ -317,4 +317,26 @@ class AgentRuntimeTest {
         var failed = assertInstanceOf(AgentEvent.TurnFailed.class, events.get(events.size() - 1));
         assertTrue(failed.reason().contains("append down"));
     }
+
+    @Test
+    void blankCompletionEmitsTurnCompletedButPersistsNothing() {
+        var store = new FakeStore();
+        var gateway = new FakeGateway(Multi.createFrom().empty());
+        var runtime = new AgentRuntime(store, gateway);
+
+        List<AgentEvent> events =
+                runtime.execute(TurnRequest.of("s1", "hi"))
+                        .collect()
+                        .asList()
+                        .await()
+                        .atMost(Duration.ofSeconds(5));
+
+        var completed = assertInstanceOf(AgentEvent.TurnCompleted.class, events.get(events.size() - 1));
+        assertEquals("", completed.text());
+        assertTrue(events.stream().anyMatch(e -> e instanceof AgentEvent.ModelCompleted));
+        assertTrue(
+                store.appended.isEmpty(),
+                "a blank completion must persist nothing — the renderer shows the error"
+                        + " fallback, and memory must agree the turn did not happen");
+    }
 }

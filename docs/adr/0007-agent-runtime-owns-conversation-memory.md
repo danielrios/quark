@@ -7,7 +7,7 @@
 **Related documents:**
 - [`src/main/java/com/quark/runtime/AgentRuntime.java`](../../src/main/java/com/quark/runtime/AgentRuntime.java) — the new memory owner.
 - [`src/main/java/com/quark/memory/InMemoryChatMemoryStore.java`](../../src/main/java/com/quark/memory/InMemoryChatMemoryStore.java) — the Plan 4 `ChatMemoryStore` seam ADR 0003 reserved.
-- [`src/test/java/com/quark/telegram/TelegramConversationMemoryTest.java`](../../src/test/java/com/quark/telegram/TelegramConversationMemoryTest.java) — the regression guard, altitude unchanged.
+- [`src/test/java/com/quark/adapter/telegram/TelegramConversationMemoryTest.java`](../../src/test/java/com/quark/adapter/telegram/TelegramConversationMemoryTest.java) — the regression guard, altitude unchanged.
 - quarkus-langchain4j docs: [Models](https://docs.quarkiverse.io/quarkus-langchain4j/dev/models.html) — model beans are built from `application.properties` config and directly `@Inject`-able; no `@RegisterAiService` required.
 - quarkus-langchain4j docs: [Messages and Memory](https://docs.quarkiverse.io/quarkus-langchain4j/dev/messages-and-memory.html) — the AI-service memory machinery this ADR retires.
 - [Plan 4](../superpowers/plans/2026-07-03-plan-4-runtime-extraction.md) — the extraction this decision lands in.
@@ -77,6 +77,15 @@ ADR 0006 governs). Per §8, the documented contract was checked **before** delet
   `max-messages`; the in-flight prompt adds the pending user message on top. Plan 2's
   `MessageWindowChatMemory` counted the pending message inside the window. The
   one-message difference is accepted and documented in the runtime javadoc.
+- **Blank completions persist nothing.** A zero-token model completion still emits
+  `ModelCompleted` + `TurnCompleted("")`, but neither the user nor the (empty)
+  assistant message is persisted: renderers surface the error fallback for such
+  turns, so memory agrees the turn did not happen — a resend does not double the
+  user message, and no empty assistant message is replayed into later prompts.
+  (langchain4j's AiServices persisted empty replies.)
+- **`TurnFailed.reason` is message-only.** Exception class names never enter the
+  event stream (Plan 6 serializes it to external SSE clients); full stack traces
+  stay in the log, correlated by `turnId`.
 
 ## Consequences
 

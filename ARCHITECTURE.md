@@ -232,7 +232,11 @@ Rationale: [ADR 0001](docs/adr/0001-event-driven-agentevent-stream.md).
 | `memory.*`  | `core` (langchain4j only inside `memory.chat`)   | `runtime`, `adapter.*`, `provider.*`         |
 
 ArchUnit tests live under `src/test/java/.../archtest` and fail the
-build on violation.
+build on violation. They apply to **production classes only**: the
+adapter *test* tree legitimately imports `provider.gemini` and
+langchain4j because the §8 memory backstops
+(`TelegramConversationMemoryTest`, `TelegramStreamingMemoryTest`) must
+fake the real model boundary.
 
 ## Observability
 
