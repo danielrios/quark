@@ -8,7 +8,7 @@ current task pointer, session counter, last ~3 trajectory entries, and
 live stack traces.
 
 ## Current Task
-- Plan 4 — runtime extraction — **implementation DONE** on branch `plan-4-runtime-extraction` (plan file: [superpowers/plans/2026-07-03-plan-4-runtime-extraction.md](superpowers/plans/2026-07-03-plan-4-runtime-extraction.md)); PR to main + code review next.
+- Plan 4 — runtime extraction — **DONE, in review: [PR #26](https://github.com/danielrios/quark/pull/26)** (branch `plan-4-runtime-extraction`, 12 commits, CI green). Pre-merge review trail on the PR: Opus whole-branch (Ready to merge, 4 Minor fixed) → Fable critique loop round 1 (caught the whitespace-only blank-turn predicate mismatch, all findings fixed) → round 2 CLEAN. Final gate: 53 tests, 0 failures. Awaiting human merge; live Telegram smoke is the post-merge follow-up.
 - **Next after merge: Plan 5 — NIM provider + `/provider` + `/status`** (ADR 0003); plan file not yet authored.
 
 ## System State
