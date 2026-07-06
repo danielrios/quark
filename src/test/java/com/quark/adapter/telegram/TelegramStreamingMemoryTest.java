@@ -1,12 +1,14 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.quark.chat.Assistant;
-import com.quark.chat.RecordingStreamingChatModel;
+import com.quark.provider.gemini.RecordingStreamingChatModel;
+import com.quark.core.AgentEvent;
+import com.quark.core.TurnRequest;
+import com.quark.memory.ChatMemoryStore;
+import com.quark.runtime.AgentRuntime;
 import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.test.junit.QuarkusMock;
@@ -20,23 +22,26 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * End-to-end memory test for the streaming path: verifies that cross-turn history is correctly
- * accumulated when using {@code Assistant.streamChat()} (the production CHAT path after Plan 3).
+ * End-to-end memory test of the runtime streaming path: {@code AgentRuntime.execute} →
+ * {@code GeminiModelGateway} → {@code StreamingChatModel}, proving the runtime persists the turn
+ * at completion so that the second turn replays the first turn's history.
  *
- * <p>Mirrors {@link TelegramConversationMemoryTest} but drives the streaming method instead of
- * the blocking {@code chat()}. Each turn runs inside its own activated-then-terminated CDI request
- * context, mirroring {@code TelegramBotRunner.handle()}. A {@link RecordingStreamingChatModel}
- * replaces the real Gemini streaming model via {@code QuarkusMock.installMockForType}.
+ * <p>Mirrors {@link TelegramConversationMemoryTest} but drives {@code AgentRuntime.execute}
+ * directly instead of the full {@code TelegramBotRunner} dispatch path. Each turn runs inside its
+ * own activated-then-terminated CDI request context, mirroring {@code TelegramBotRunner.handle()}.
+ * A {@link RecordingStreamingChatModel} replaces the real Gemini streaming model via
+ * {@code QuarkusMock.installMockForType} — the runtime's {@code GeminiModelGateway} resolves the
+ * same mocked bean.
  *
- * <p>This guards the §8 / ADR-0006 concern: if the generated {@code @RegisterAiService}
- * implementation does not write the streaming response to memory at completion, the second turn
- * will not see the first turn's history and this test goes red.
+ * <p>This guards the §8 / ADR-0007 write-back concern: if {@code AgentRuntime} does not persist
+ * the streamed response to the {@code ChatMemoryStore} at completion, the second turn will not see
+ * the first turn's history and this test goes red.
  */
 @QuarkusTest
 class TelegramStreamingMemoryTest {
 
     @Inject
-    Assistant assistant;
+    AgentRuntime runtime;
 
     @Inject
     ChatMemoryStore store;
@@ -53,12 +58,12 @@ class TelegramStreamingMemoryTest {
 
     @AfterEach
     void cleanStore() {
-        store.deleteMessages(SESSION);
+        store.delete(SESSION);
     }
 
     /**
-     * Drives one streamChat() call in its own request context, waiting for the stream to complete.
-     * Mirrors the CDI context lifecycle of TelegramBotRunner.handle().
+     * Drives one {@code AgentRuntime.execute} turn in its own request context, waiting for the
+     * stream to complete. Mirrors the CDI context lifecycle of TelegramBotRunner.handle().
      */
     private String asStreamingUpdate(String sessionId, String text) throws InterruptedException {
         ManagedContext ctx = Arc.container().requestContext();
@@ -66,9 +71,13 @@ class TelegramStreamingMemoryTest {
         try {
             CountDownLatch latch = new CountDownLatch(1);
             StringBuilder buffer = new StringBuilder();
-            assistant.streamChat(sessionId, text)
+            runtime.execute(TurnRequest.of(sessionId, text))
                 .subscribe().with(
-                    buffer::append,
+                    event -> {
+                        if (event instanceof AgentEvent.TokenEmitted token) {
+                            buffer.append(token.text());
+                        }
+                    },
                     err -> latch.countDown(),
                     latch::countDown);
             latch.await(10, TimeUnit.SECONDS);

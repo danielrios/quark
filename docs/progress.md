@@ -8,8 +8,8 @@ current task pointer, session counter, last ~3 trajectory entries, and
 live stack traces.
 
 ## Current Task
-- Plan 2 — in-process working memory + `/reset` — **DONE** (commits `18bd893`–`8e8f5e8`, branch `worktree-plan-2-working-memory-reset`). Per-session memory via `@MemoryId` on an `@ApplicationScoped` `Assistant` (see [ADR 0006](adr/0006-application-scoped-ai-service-for-memory.md)); `/reset` clears session via `ChatMemoryStore.deleteMessages`. 26 tests, zero failures.
-- **Next: Plan 3 — Telegram streaming via throttled message edits** (ADR 0003); plan file not yet authored.
+- Plan 4 — runtime extraction — **DONE, in review: [PR #26](https://github.com/danielrios/quark/pull/26)** (branch `plan-4-runtime-extraction`, 12 commits, CI green). Pre-merge review trail on the PR: Opus whole-branch (Ready to merge, 4 Minor fixed) → Fable critique loop round 1 (caught the whitespace-only blank-turn predicate mismatch, all findings fixed) → round 2 CLEAN. Final gate: 53 tests, 0 failures. Awaiting human merge; live Telegram smoke is the post-merge follow-up.
+- **Next after merge: Plan 5 — NIM provider + `/provider` + `/status`** (ADR 0003); plan file not yet authored.
 
 ## System State
 - Current Session Attempts: 0 / 3
@@ -19,6 +19,13 @@ live stack traces.
 
 ## Active Trajectory Logs / Error Traces
 <!-- Append the most recent entry at the top. Trim older entries on each session — they live in the git log and PR descriptions, not here. -->
+
+### 2026-07-04 — Plan 4 implementation complete — runtime extraction
+- branch: plan-4-runtime-extraction (Tasks 0–8 each one green commit; c83fd12 → docs close-out)
+- What landed: `core` (sealed `AgentEvent`, `TurnRequest`, `ChatMessage`), `memory` (`ChatMemoryStore` SPI + bounded `@ApplicationScoped` in-memory impl), `provider` (`ModelGateway` SPI + `GeminiModelGateway` over the injectable `StreamingChatModel` bean), `runtime.AgentRuntime` (persist-on-success-only, failures-as-events, one terminal event), Telegram cut over to event projection, **`Assistant` retired under §8 in its own commit with ADR 0007**, packages moved to `adapter.telegram`.
+- Gate: `./gradlew test` (quarkus-agent MCP unavailable this session; documented fallback) — **49 tests, 0 failures, 0 errors** at close-out (baseline was 32). Every prior behavioral assertion preserved; `TelegramConversationMemoryTest` kept its request-context-per-update altitude and passed unchanged after the deletion.
+- Verification honesty (§8): behavior is **verified via integration tests at the real request-context boundary** (conversation + streaming memory guards) — *not* live-smoked against Telegram from this environment.
+- Process: cavecrew delegation — sonnet builders (≤2-file scopes), opus reviewers per task (2 parallel on the cutover). Review yield: 1 test gap closed (persist-failure path), zero-token placeholder fix, explicit BUFFER strategy, window+1 nuance documented, javadoc corrections.
 
 ### 2026-06-26 01:46Z — Plan 3 implementation complete — Telegram streaming via throttled edits
 - branch: plan-3-telegram-streaming

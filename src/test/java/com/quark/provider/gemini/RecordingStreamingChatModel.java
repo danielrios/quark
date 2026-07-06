@@ -1,4 +1,4 @@
-package com.quark.chat;
+package com.quark.provider.gemini;
 
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -11,11 +11,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Plain (non-CDI) fake {@link StreamingChatModel} for {@code QuarkusMock.installMockForType}.
- * Records the message list the AI service hands it on each {@link #chat} call and emits a
- * deterministic reply — mirroring {@link RecordingChatModel} for the streaming path.
+ * Records the message list handed to it on each {@link #chat} call and emits a deterministic
+ * "ack-N" reply as one partial response plus completion.
  *
- * <p>Used by {@code TelegramStreamingMemoryTest} to prove that cross-turn history is replayed
- * through {@code Assistant.streamChat()} the same way it is through {@code Assistant.chat()}.
+ * <p>Used by {@code TelegramStreamingMemoryTest} and {@code TelegramConversationMemoryTest} to
+ * prove cross-turn history is replayed through the runtime path
+ * ({@code AgentRuntime → GeminiModelGateway → StreamingChatModel}) — see ADR 0007.
  */
 public class RecordingStreamingChatModel implements StreamingChatModel {
 

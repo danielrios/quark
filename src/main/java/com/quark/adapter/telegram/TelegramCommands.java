@@ -1,4 +1,4 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
 public final class TelegramCommands {
 

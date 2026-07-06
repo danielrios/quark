@@ -1,11 +1,13 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
-import com.quark.chat.Assistant;
-import com.quark.telegram.TelegramMessages.GetUpdatesResponse;
-import com.quark.telegram.TelegramMessages.IncomingText;
-import com.quark.telegram.TelegramMessages.SendMessage;
-import com.quark.telegram.TelegramMessages.SendMessageResponse;
-import com.quark.telegram.TelegramMessages.TelegramUpdate;
+import com.quark.core.AgentEvent;
+import com.quark.core.TurnRequest;
+import com.quark.runtime.AgentRuntime;
+import com.quark.adapter.telegram.TelegramMessages.GetUpdatesResponse;
+import com.quark.adapter.telegram.TelegramMessages.IncomingText;
+import com.quark.adapter.telegram.TelegramMessages.SendMessage;
+import com.quark.adapter.telegram.TelegramMessages.SendMessageResponse;
+import com.quark.adapter.telegram.TelegramMessages.TelegramUpdate;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.logging.Log;
@@ -13,8 +15,8 @@ import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
-import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import jakarta.inject.Inject;
+import java.time.Duration;
 import java.util.List;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
@@ -27,10 +29,7 @@ public class TelegramBotRunner {
     TelegramApi api;
 
     @Inject
-    Assistant assistant;
-
-    @Inject
-    ChatMemoryStore chatMemoryStore;
+    AgentRuntime runtime;
 
     @Inject
     TelegramStreamHandler streamHandler;
@@ -111,11 +110,12 @@ public class TelegramBotRunner {
     }
 
     // Package-private: test seam used by TelegramBotRunnerResetTest and TelegramConversationMemoryTest.
-    // Handles commands and blocking chat. The live path uses handle() → TelegramStreamHandler.
+    // Handles commands and blocking chat. The live CHAT path uses handle() → TelegramStreamHandler;
+    // dispatch RESET is also the live reset path.
     String dispatch(String sessionId, String text) {
         switch (TelegramCommands.parse(text)) {
             case RESET:
-                chatMemoryStore.deleteMessages(sessionId);
+                runtime.reset(sessionId);
                 return "Memory cleared. Starting fresh.";
             case CHAT:
             default:
@@ -125,9 +125,14 @@ public class TelegramBotRunner {
 
     private String chat(String sessionId, String userMessage) {
         try {
-            return assistant.chat(sessionId, userMessage);
+            AgentEvent last = runtime.execute(TurnRequest.of(sessionId, userMessage))
+                    .collect().last().await().atMost(Duration.ofSeconds(60));
+            return (last instanceof AgentEvent.TurnCompleted completed
+                            && !completed.text().isBlank())
+                    ? completed.text()
+                    : TelegramMessages.ERR_FALLBACK;
         } catch (Exception e) {
-            Log.error("Gemini call failed", e);
+            Log.error("Turn failed for session " + sessionId, e);
             return TelegramMessages.ERR_FALLBACK;
         }
     }

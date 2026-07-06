@@ -17,8 +17,13 @@ the current shape and the destination shape.
 ## What's actually here today
 
 A Quarkus 3.35.4 / Java 25 / Gradle project with a running Telegram bot:
-message it and Gemini replies (Plan 1 walking skeleton). No memory, no
-commands, no streaming yet — those arrive in Plans 2–3.
+message it and Gemini streams a reply into a live-edited message, with
+bounded per-session memory and `/reset` (Plans 1–3). Since Plan 4 every
+turn runs through the event-driven core: `AgentRuntime` orchestrates a
+typed `Multi<AgentEvent>` stream, memory sits behind a `ChatMemoryStore`
+SPI, and Gemini is a `ModelGateway` provider — layered packages
+(`core/runtime/memory/provider/adapter`), see
+[ADR 0007](docs/adr/0007-agent-runtime-owns-conversation-memory.md).
 
 Implementation order: [`docs/adr/0003-walking-skeleton-first-plan-sequencing.md`](docs/adr/0003-walking-skeleton-first-plan-sequencing.md).
 MVP design: [`docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md`](docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md).
@@ -34,31 +39,36 @@ Items not yet implemented are marked _(planned)_; see
 
 * Telegram bot via long polling
 * Google Gemini via `quarkus-langchain4j-ai-gemini`
-* `POST /chat` and `POST /chat/stream` (SSE) _(planned)_
+* `POST /chat` and `POST /chat/stream` (SSE) _(planned — Plan 6)_
 * In-memory bounded conversation history per session
-* Streaming token output, with throttled Telegram message edits _(planned)_
+* Streaming token output, with throttled Telegram message edits
 * `/reset` Telegram command
-* `/start`, `/status` Telegram commands _(planned)_
-* Structured logs with per-turn correlation id _(planned)_
-* Unit tests covering memory, dispatch, and the Telegram renderer _(planned)_
+* `/start`, `/status` Telegram commands _(planned — Plan 5)_
+* Per-turn correlation id (`turnId`) on runtime log lines
+* Unit tests covering memory, dispatch, the runtime event contract, and the Telegram renderer
 
-### Explicitly deferred
-
-These belong to the destination architecture, not the MVP:
+### Landed with Plan 4 (formerly deferred)
 
 * `AgentRuntime` orchestration core
 * Typed `Multi<AgentEvent>` runtime contract
-* `ModelGateway` provider abstraction
-* NVIDIA NIM provider, provider preference store, `/provider` command
+* `ModelGateway` provider abstraction + `ChatMemoryStore` SPI
 * Layered packages (`core/runtime/memory/provider/adapter`)
-* ArchUnit-enforced boundaries
-* Micrometer metrics, distributed tracing
+
+### Explicitly deferred
+
+These belong to later plans:
+
+* NVIDIA NIM provider, provider preference store, `/provider` command (Plan 5)
+* REST + SSE adapter (Plan 6)
+* ArchUnit-enforced boundaries, Micrometer metrics, distributed tracing (Plan 7)
 * Tool calling, planner/executor decomposition, reflection loops
 * Episodic memory, vector search, Redis/Postgres backends
 * Retry policies, multi-tenancy, webhook Telegram mode
 
-The point of the MVP is to validate the conversational loop end-to-end
-before reaching for any of the above.
+The point of the MVP was to validate the conversational loop end-to-end
+before reaching for any of the above — that validation is done; the
+runtime seams were extracted from working code per
+[ADR 0003](docs/adr/0003-walking-skeleton-first-plan-sequencing.md).
 
 ---
 

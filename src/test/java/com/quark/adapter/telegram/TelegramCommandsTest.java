@@ -1,8 +1,8 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.quark.telegram.TelegramCommands.Command;
+import com.quark.adapter.telegram.TelegramCommands.Command;
 import org.junit.jupiter.api.Test;
 
 class TelegramCommandsTest {

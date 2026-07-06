@@ -1,11 +1,11 @@
 # 0006 — `@ApplicationScoped` AI service for cross-request conversation memory
 
-**Status:** Accepted, 2026-05-30.
+**Status:** Superseded in part by [ADR 0007](0007-agent-runtime-owns-conversation-memory.md), 2026-07-04 — the `@RegisterAiService` bean this ADR governs was retired in Plan 4; the invariant it established (application-scoped memory + explicit per-call session id) carries forward there. The Context section stays authoritative for the AI-service scope trap. Originally accepted 2026-05-30.
 **Deciders:** Daniel + debugging session (PR #14 review).
 
 **Related documents:**
-- [`src/main/java/com/quark/chat/Assistant.java`](../../src/main/java/com/quark/chat/Assistant.java) — the bean this ADR governs.
-- [`src/test/java/com/quark/telegram/TelegramConversationMemoryTest.java`](../../src/test/java/com/quark/telegram/TelegramConversationMemoryTest.java) — the regression guard.
+- `src/main/java/com/quark/chat/Assistant.java` — the bean this ADR governed; deleted in Plan 4 (ADR 0007).
+- [`src/test/java/com/quark/adapter/telegram/TelegramConversationMemoryTest.java`](../../src/test/java/com/quark/adapter/telegram/TelegramConversationMemoryTest.java) — the regression guard.
 - quarkus-langchain4j docs: [Messages and Memory](https://docs.quarkiverse.io/quarkus-langchain4j/dev/messages-and-memory.html).
 - [ADR 0003](0003-walking-skeleton-first-plan-sequencing.md) — reserves the *custom* `ChatMemoryStore` seam for Plan 4.
 

@@ -1,12 +1,12 @@
-package com.quark.telegram;
+package com.quark.adapter.telegram;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.quark.telegram.TelegramMessages.Chat;
-import com.quark.telegram.TelegramMessages.IncomingText;
-import com.quark.telegram.TelegramMessages.Message;
-import com.quark.telegram.TelegramMessages.TelegramUpdate;
+import com.quark.adapter.telegram.TelegramMessages.Chat;
+import com.quark.adapter.telegram.TelegramMessages.IncomingText;
+import com.quark.adapter.telegram.TelegramMessages.Message;
+import com.quark.adapter.telegram.TelegramMessages.TelegramUpdate;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
