@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.5.0](https://github.com/danielrios/quark/compare/v0.4.0...v0.5.0) (2026-07-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* langchain4j AI-service layer removed; model access goes through ModelGateway, memory through the quark ChatMemoryStore SPI.
+
+### Features
+
+* **core:** AgentEvent, TurnRequest, ChatMessage contracts ([030bf32](https://github.com/danielrios/quark/commit/030bf329665235c1ff91926d1a65cab0d1870279))
+* **memory:** ChatMemoryStore SPI + bounded InMemoryChatMemoryStore (TDD) ([deb6c80](https://github.com/danielrios/quark/commit/deb6c800cfd5be11b5f3cf91c553192d31158d92))
+* **provider:** ModelGateway SPI + GeminiModelGateway over StreamingChatModel (TDD) ([60b401c](https://github.com/danielrios/quark/commit/60b401c4db869ee615116c2049a2682cc463443b))
+* **runtime:** AgentRuntime — Multi&lt;AgentEvent&gt; execute(TurnRequest) (TDD) ([f3ff5f4](https://github.com/danielrios/quark/commit/f3ff5f4625f8b156066670cebd9091f94aa03d95))
+
+
+### Bug Fixes
+
+* **runtime:** blank completions persist nothing; TurnFailed.reason message-only ([3da3358](https://github.com/danielrios/quark/commit/3da33586f2620626d976ada17e1f1cee7dc0a390))
+* **telegram:** unify blank-turn predicate — renderer matches runtime isBlank() ([86b6bb5](https://github.com/danielrios/quark/commit/86b6bb5e373c37a445c0dbeb0af7a0a07ca2c715))
+
+
+### Refactors
+
+* move telegram adapter to com.quark.adapter.telegram ([6937768](https://github.com/danielrios/quark/commit/6937768e70f0291375a5c94e703f32cc52a7aae8))
+* retire @RegisterAiService Assistant — runtime owns memory (ADR 0007) ([805fff1](https://github.com/danielrios/quark/commit/805fff1f0456b09e55d9f2f6e59d505bc7185c9a))
+* **telegram:** drive rendering from AgentEvent stream via AgentRuntime ([429cf55](https://github.com/danielrios/quark/commit/429cf550a5c8c3f2866f9c41c62320a967ed9c40))
+
 ## [0.4.0](https://github.com/danielrios/quark/compare/v0.3.0...v0.4.0) (2026-06-26)
 
 
