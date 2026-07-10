@@ -8,17 +8,26 @@ current task pointer, session counter, last ~3 trajectory entries, and
 live stack traces.
 
 ## Current Task
-- Plan 4 — runtime extraction — **DONE, in review: [PR #26](https://github.com/danielrios/quark/pull/26)** (branch `plan-4-runtime-extraction`, 12 commits, CI green). Pre-merge review trail on the PR: Opus whole-branch (Ready to merge, 4 Minor fixed) → Fable critique loop round 1 (caught the whitespace-only blank-turn predicate mismatch, all findings fixed) → round 2 CLEAN. Final gate: 53 tests, 0 failures. Awaiting human merge; live Telegram smoke is the post-merge follow-up.
-- **Next after merge: Plan 5 — NIM provider + `/provider` + `/status`** (ADR 0003); plan file not yet authored.
+- Plan 4 — runtime extraction — **DONE & MERGED** ([PR #26](https://github.com/danielrios/quark/pull/26), released 0.5.0). 53 tests, 0 failures on main.
+- **Current: Plan 5 — NIM provider + `/provider` + `/status`** (ADR 0003). Design trio authored 2026-07-10 through a 3-round Fable 5 critique loop:
+  [brainstorm](superpowers/brainstorms/2026-07-10-plan-5-nim-provider-brainstorm.md) →
+  [spec](superpowers/specs/2026-07-10-plan-5-nim-provider.md) (normative) →
+  [plan](superpowers/plans/2026-07-10-plan-5-nim-provider.md). Implementation next, task by task per the plan.
 
 ## System State
 - Current Session Attempts: 0 / 3
 - Git Branch: see `git branch --show-current`
-- **Test gate fallback active:** `quarkus_callTool devui-testing_runTests` cannot detect HTTP port (persistent MCP bug across all stop/start cycles). Using `./gradlew test` as gate — harness pre-approved, Java 25 confirmed available.
-- **Last gate (Plan 1 close-out):** `./gradlew test` → BUILD SUCCESSFUL, 10 tests, zero failures. Gotcha: keep dev mode off port 8081 — it collides with Quarkus's default test port and fails `@QuarkusTest` binding.
+- **Test gate fallback active (this remote environment, 2026-07-10):** quarkus-agent MCP absent; additionally the Gradle 9.5.1 wrapper distribution and JDK downloads are egress-blocked (proxy policy — reported, not routed around). Sanctioned local gate: apt `openjdk-25-jdk-headless` + system Gradle 8.14.3 with a JDK 25 toolchain init script — `/opt/gradle/bin/gradle test -I <scratch>/toolchain25.init.gradle` (daemon on JDK 21, compile/test forked to 25). CI remains the canonical `./gradlew test`.
+- **Last gate (Plan 5 baseline, post-Plan-4 main):** 53 tests, zero failures, zero errors. Gotcha: keep dev mode off port 8081 — it collides with Quarkus's default test port and fails `@QuarkusTest` binding.
 
 ## Active Trajectory Logs / Error Traces
 <!-- Append the most recent entry at the top. Trim older entries on each session — they live in the git log and PR descriptions, not here. -->
+
+### 2026-07-10 — Plan 5 design trio authored via Fable 5 critique loop
+- branch: `claude/plan-4-runtime-extraction-zsqvkp` restarted from post-merge main (merged-PR rule).
+- **Process:** brainstorm → spec → plan, each round-tripped through a persistent Fable 5 critic session. Round 1 (brainstorm): 15 findings — incl. a real blocker (a second `ModelGateway` bean makes every unqualified injection ambiguous → suite-wide deployment failure; drove the plan's Tasks 1–3-before-4 sequencing). Round 2 (spec): brainstorm confirmed fully resolved; 11 minor/nit spec findings (reply-string determinism, config landing order, `${NVIDIA_API_KEY:dummy}`) — all applied. Round 3 (plan): spec re-verified fully converged; plan got 1 major (no branch-creation step — would have stacked Plan 5 on merged Plan 4 history) + 3 minor + 4 nit, all applied; gate-greenness verified task-by-task by the critic; final verdict **ready to drive implementation**.
+- **Docs-first (§8) with blocked docs site:** `docs.quarkiverse.io` egress-blocked; config claims verified instead against the extensions' *embedded* config docs (`META-INF/quarkus-config-doc/quarkus-config-model.json`, quarkus-langchain4j 1.9.2): named-model pattern, provider ids `ai-gemini`/`openai`, `@ModelName`(+`Literal`), per-model `base-url`/`api-key`, and the **10 s default client timeout** (raised to 60 s in the spec — would have caused mysterious mid-stream failures). Citations land in ADR 0008.
+- **No live NIM smoke possible here** (`integrate.api.nvidia.com` egress-blocked): local proof = WireMock wire test + composed-path `@QuarkusTest`; live Telegram/NIM smoke is a post-merge user step.
 
 ### 2026-07-04 — Plan 4 implementation complete — runtime extraction
 - branch: plan-4-runtime-extraction (Tasks 0–8 each one green commit; c83fd12 → docs close-out)
@@ -39,10 +48,4 @@ live stack traces.
 - **Pipelines reviewed, no change needed:** `ci.yml` runs `./gradlew spotlessCheck` + `test` on every `pull_request`; the new `TelegramConversationMemoryTest` already runs there, so a cross-request memory regression turns CI red without any workflow edit.
 - **Model swap:** `gemini-2.5-flash` → `gemini-3.1-flash-lite` (cost). Tests use a mock model + `test-key`, so the gate does not exercise the live id — confirm it resolves with one real Telegram turn (same Plan-1 404 trap that hit `gemini-2.0-flash`).
 
-### 2026-05-30 — Memory root-caused, refactored to the minimal correct fix (systematic debugging)
-- **Resolved** the prior session's open follow-up. Root cause, confirmed in `quarkus-langchain4j-core:1.9.2` bytecode **and** the official docs: `@RegisterAiService` defaults to `@RequestScoped`; `TelegramBotRunner.handle()` terminates a request context per update, firing the generated bean's `@PreDestroy` → `QuarkusAiServiceContext.close()` → `ChatMemoryService.clearAll()` → `ChatMemory.clear()` → `ChatMemoryStore.deleteMessages(sessionId)`. The session is **wiped from the store at the end of every update**, regardless of store implementation.
-- **Load-bearing fix = `@ApplicationScoped` on `Assistant`** (not the custom store). Proven by an end-to-end test (`TelegramConversationMemoryTest`: fake `ChatModel` via `QuarkusMock.installMockForType`, two turns across separate request contexts) run as a one-variable matrix: **B** = `@ApplicationScoped` + default store → PASS; **D** = default `@RequestScoped` + default store → FAIL (turn 2 loses turn 1). B vs D isolates scope; A vs B isolates store.
-- **Refactor (better than the original fix):** deleted `AppScopedChatMemoryStore` (dead weight — a duplicate of the extension's `InMemoryChatMemoryStore`, wiped by `deleteMessages` just the same); kept `@ApplicationScoped Assistant` + the default store. Deleted `ChatMemoryPersistenceTest` (it passed even when end-to-end memory was broken → false confidence). Recorded the decision in [ADR 0006](adr/0006-application-scoped-ai-service-for-memory.md). Net vs `76dfeaf`: one fewer class, a real e2e regression guard, scope documented inline so it is not "cleaned up" again.
-- **Test gate:** `./gradlew test` → BUILD SUCCESSFUL, 26 tests, zero failures (10 `TelegramCommandsTest` + 1 `AssistantMemoryWiringTest` + 2 `TelegramBotRunnerResetTest` + 3 `TelegramConversationMemoryTest` + 10 existing).
-- **Live verification:** the **shipped** config **B** (custom store deleted, `@ApplicationScoped Assistant` + default store) was live-confirmed by Daniel on 2026-05-30 — two-turn memory persists and `/reset` clears, end-to-end through real Telegram + Gemini. Matches the e2e test prediction.
 
