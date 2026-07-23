@@ -69,7 +69,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@v6
       - name: Review dependencies
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
