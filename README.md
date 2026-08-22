@@ -1,173 +1,304 @@
 # quark
 
-A compact streaming-first runtime for LLM-driven conversation, built on
-Quarkus.
+A small, embeddable, streaming-first agent execution runtime for the JVM.
 
-The MVP receives a message, calls a model, streams a reply, remembers a
-few turns of context, and ships that experience over Telegram and HTTP.
+> Build agents with anything. Run them with control.
 
-The long-term ambition is a more general agent runtime — tools, planning,
-reflection, episodic memory, multi-provider orchestration. That work
-intentionally does not start yet. See [`MANIFESTO.md`](MANIFESTO.md) for
-the engineering thesis and [`ARCHITECTURE.md`](ARCHITECTURE.md) for both
-the current shape and the destination shape.
+Quark models an agent turn as an observable execution lifecycle rather
+than a `prompt -> string` call. Its long-term purpose is to provide
+explicit execution semantics for agents that need to run inside real JVM
+systems: observable, controllable, testable, and eventually recoverable.
 
----
+Quark is still early. The current implementation is a Java 25 + Quarkus
+walking skeleton that runs a Telegram -> Gemini conversational loop with
+bounded memory and a typed `Multi<AgentEvent>` runtime stream. The next
+engineering phase will make those runtime semantics independent from the
+application framework that currently hosts them.
 
-## What's actually here today
-
-A Quarkus 3.35.4 / Java 25 / Gradle project with a running Telegram bot:
-message it and Gemini streams a reply into a live-edited message, with
-bounded per-session memory and `/reset` (Plans 1–3). Since Plan 4 every
-turn runs through the event-driven core: `AgentRuntime` orchestrates a
-typed `Multi<AgentEvent>` stream, memory sits behind a `ChatMemoryStore`
-SPI, and Gemini is a `ModelGateway` provider — layered packages
-(`core/runtime/memory/provider/adapter`), see
-[ADR 0007](docs/adr/0007-agent-runtime-owns-conversation-memory.md).
-
-Implementation order: [`docs/adr/0003-walking-skeleton-first-plan-sequencing.md`](docs/adr/0003-walking-skeleton-first-plan-sequencing.md).
-MVP design: [`docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md`](docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md).
+See [`MANIFESTO.md`](MANIFESTO.md) for the engineering principles,
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for current and intended boundaries,
+and [`docs/vision/runtime-platform.md`](docs/vision/runtime-platform.md)
+for the long-term direction.
 
 ---
 
-## MVP scope
+## Why Quark exists
 
-### In
+Creating a proof-of-concept agent is becoming easy. Running agents in
+production is a different problem.
 
-Items not yet implemented are marked _(planned)_; see
-[`What's actually here today`](#whats-actually-here-today) for the current state.
+Once agentic behavior reaches real systems, teams need to answer questions
+such as:
 
-* Telegram bot via long polling
-* Google Gemini via `quarkus-langchain4j-ai-gemini`
-* `POST /chat` and `POST /chat/stream` (SSE) _(planned — Plan 6)_
-* In-memory bounded conversation history per session
-* Streaming token output, with throttled Telegram message edits
-* `/reset` Telegram command
-* `/start`, `/status` Telegram commands _(planned — Plan 5)_
-* Per-turn correlation id (`turnId`) on runtime log lines
-* Unit tests covering memory, dispatch, the runtime event contract, and the Telegram renderer
+- which model and provider executed a turn?
+- what context was available?
+- which tools were exposed and requested?
+- which arguments were passed?
+- why was an action allowed, blocked, or held for approval?
+- how long did each execution phase take?
+- what did a turn cost?
+- can execution be cancelled safely?
+- can failures be diagnosed without reconstructing behavior from logs?
+- can execution eventually be replayed, resumed, or compared across versions?
+- can teams use different agent frameworks while sharing execution semantics?
 
-### Landed with Plan 4 (formerly deferred)
+Quark is intended to occupy that layer.
 
-* `AgentRuntime` orchestration core
-* Typed `Multi<AgentEvent>` runtime contract
-* `ModelGateway` provider abstraction + `ChatMemoryStore` SPI
-* Layered packages (`core/runtime/memory/provider/adapter`)
+It does not need to own prompts, planning strategies, every model SDK, or the
+application framework hosting it. Its core concern is narrower:
 
-### Explicitly deferred
+> explicit, observable, and controllable execution of agent turns.
 
-These belong to later plans:
+Conceptually:
 
-* NVIDIA NIM provider, provider preference store, `/provider` command (Plan 5)
-* REST + SSE adapter (Plan 6)
-* ArchUnit-enforced boundaries, Micrometer metrics, distributed tracing (Plan 7)
-* Tool calling, planner/executor decomposition, reflection loops
-* Episodic memory, vector search, Redis/Postgres backends
-* Retry policies, multi-tenancy, webhook Telegram mode
+```text
+Spring AI / LangChain4j / provider SDKs / custom agent logic
+                         │
+                         ▼
+                       Quark
+                         │
+              execution semantics
+                         │
+          ┌──────────────┼──────────────┐
+          │              │              │
+       observe        control         recover
+```
 
-The point of the MVP was to validate the conversational loop end-to-end
-before reaching for any of the above — that validation is done; the
-runtime seams were extracted from working code per
+The integrations above are direction, not implemented modules today.
+
+---
+
+## What is actually here today
+
+The repository currently contains a Quarkus 3.35.4 / Java 25 / Gradle
+application with a running Telegram bot:
+
+- Telegram long polling
+- Gemini through `quarkus-langchain4j-ai-gemini`
+- bounded per-session conversation memory
+- streaming output through throttled Telegram edits
+- `/reset`
+- an `AgentRuntime` orchestration point
+- a sealed `AgentEvent` lifecycle contract
+- `Multi<AgentEvent>` streaming
+- a `ModelGateway` provider boundary
+- a `ChatMemoryStore` memory boundary
+- per-turn correlation through `turnId`
+
+The runtime seams were extracted from a working conversational loop rather
+than designed speculatively. That sequencing is recorded in
 [ADR 0003](docs/adr/0003-walking-skeleton-first-plan-sequencing.md).
 
+### Current coupling
+
+The runtime is not framework-independent yet.
+
+Today:
+
+- `AgentRuntime` is a CDI `@ApplicationScoped` bean;
+- the public streaming surface uses SmallRye Mutiny `Multi`;
+- `ModelGateway` also exposes `Multi`;
+- Quarkus owns application boot, DI, configuration, and the current host lifecycle;
+- LangChain4j remains inside the Gemini provider implementation.
+
+This documentation does not pretend that migration has already happened.
+The framework-independent runtime is the next architectural direction, not
+the current implementation state.
+
 ---
 
-## Run the bot
+## Execution model
 
-Set the required environment variables, then start dev mode via the
-`quarkus-agent` MCP:
+A turn is a lifecycle, not just a response string.
+
+The current event contract already models:
+
+```text
+TurnStarted
+    ↓
+MemoryLoaded
+    ↓
+ModelInvoked
+    ↓
+TokenEmitted ...
+    ↓
+ModelCompleted
+    ↓
+TurnCompleted | TurnFailed
+```
+
+Future capabilities may add concepts such as provider selection, tool
+execution, policy evaluation, approvals, cancellation, checkpoints, and
+recovery. Those are design directions, not claims about current features.
+
+The important invariant is that execution remains observable as structured
+events instead of becoming hidden orchestration.
+
+---
+
+## Framework independence
+
+Quark began as a Quarkus-based experiment in explicit, streaming agent
+execution. Quarkus was useful for building the walking skeleton quickly and
+helped expose the runtime boundaries that now deserve to stand on their own.
+
+The intended relationship is changing from:
+
+```text
+Quarkus application
+       │
+       └── Quark runtime
+```
+
+toward:
+
+```text
+Host application
+       │
+       ▼
+   Quark runtime
+```
+
+The host may eventually be Spring Boot, Quarkus, Ktor, Micronaut, plain JVM,
+a CLI process, or another JVM environment where the runtime fits.
+
+Quarkus is not being rejected. The goal is simply that the runtime must not
+belong to the framework hosting it. A future `quark-quarkus` integration may
+provide first-class Quarkus ergonomics without making Quarkus a core runtime
+dependency.
+
+---
+
+## What Quark is not
+
+Quark is deliberately not:
+
+- a ChatGPT clone;
+- a personal assistant product;
+- a Hermes or NanoClaw replacement;
+- a DeepSeek Harness clone;
+- a replacement for Spring AI or LangChain4j;
+- an LLM provider SDK collection;
+- a workflow engine;
+- a replacement for Temporal or another durable execution system;
+- a mandatory DI container;
+- an application framework;
+- a web framework;
+- an opinionated all-in-one AI platform.
+
+Some of these systems may become integrations. They should not become the
+identity of the runtime.
+
+---
+
+## Near-term direction
+
+The next engineering phase is intentionally narrower than the long-term
+vision:
+
+1. introduce Kotlin alongside the existing Java code;
+2. move public runtime contracts away from Quarkus/Mutiny-specific types;
+3. migrate streaming semantics toward Kotlin Coroutines / `Flow`;
+4. make the runtime embeddable and framework-independent;
+5. preserve current behavior through tests;
+6. remove Quarkus from the runtime core gradually;
+7. keep Quarkus available later as an optional integration;
+8. add production execution semantics incrementally as real use cases justify them.
+
+The immediate goal is **not** to build a harness framework, plugin marketplace,
+personal-agent distribution, cloud platform, giant policy DSL, or multi-agent
+orchestration system.
+
+Architecture must earn itself.
+
+---
+
+## Open-source direction
+
+Quark is intended to remain open-source-first at the runtime layer.
+
+The runtime, execution contracts, local policy enforcement, observability
+hooks, test utilities, debugging primitives, and integrations should remain
+usable without a hosted control plane.
+
+A future commercial control plane may make sense for organization-wide
+concerns such as fleet management, centralized policies, hosted traces,
+approvals, RBAC/SSO, audit, and managed evaluations. That product does not
+exist today and is not part of the current implementation plan.
+
+A guiding constraint for any future hosted product is:
+
+> If a Quark control plane disappears, the customer's application and local
+> runtime should continue executing according to local configuration.
+
+---
+
+## Running the current walking skeleton
+
+Set the required environment variables, then start Quarkus dev mode through
+the repository's Claude Code harness:
 
 ```bash
 export GEMINI_API_KEY=your-gemini-api-key
 export TELEGRAM_BOT_TOKEN=your-token-from-botfather
 ```
 
-Start dev mode (Claude Code / MCP):
-
-```
-quarkus_start   # via quarkus-agent MCP — never run ./gradlew quarkusDev directly
+```text
+quarkus_start   # via the quarkus-agent MCP
 ```
 
-Once running, message your bot in Telegram and it will reply using Gemini.
+Tests require no secrets. The `%test` profile disables Telegram and uses a
+dummy Gemini key.
 
-**Tests require no secrets.** The `%test` profile sets
-`quark.telegram.enabled=false` and a dummy Gemini key, so `./gradlew test`
-passes without any credentials.
-
----
-
-## Running (CLI)
+For direct Gradle usage:
 
 ```bash
-./gradlew build        # build + tests
-./gradlew build -Dquarkus.native.enabled=true   # native image
+./gradlew build
 ```
 
-Dev UI: <http://localhost:8080/q/dev/>.
-
-> When working through Claude Code, use the `quarkus-agent` MCP
-> (`quarkus_start`, `quarkus_status`, `quarkus_logs`) instead of running
-> `./gradlew quarkusDev` in the foreground — see
-> [`CLAUDE.md`](CLAUDE.md) and [ADR 0004](docs/adr/0004-claude-code-harness.md).
-
----
-
-## Configuration
-
-Once the MVP lands, these environment variables enable each transport:
-
-```bash
-# Gemini
-export GEMINI_API_KEY=...
-
-# Telegram (off by default)
-export QUARK_TELEGRAM_ENABLED=true
-export TELEGRAM_BOT_TOKEN=...
-```
-
----
-
-## Telegram commands
-
-| Command   | Behaviour                                |
-| --------- | ---------------------------------------- |
-| `/reset`  | clears conversation memory               |
-| `/start`  | welcome message _(planned)_              |
-| `/status` | uptime + memory size _(planned)_         |
-
-`/provider` is intentionally not part of the MVP. It arrives with the
-second provider, alongside the runtime refactor.
+Native image support belongs to the current Quarkus application and should
+not be interpreted as a commitment for the future framework-independent
+runtime.
 
 ---
 
 ## Repository layout
 
-```
-README.md            — this file
+```text
+README.md            — positioning, current state, and project entry point
 MANIFESTO.md         — engineering philosophy
-ARCHITECTURE.md      — today's pipeline + destination shape
+ARCHITECTURE.md      — current architecture and intended boundaries
 CLAUDE.md            — operating rules for Claude Code sessions
 docs/
-├── adr/             — load-bearing architectural decisions
-├── progress.md      — task progress ledger
-├── superpowers/
-│   ├── specs/       — design specs (MVP design lives here)
-│   └── plans/       — incremental implementation plans
-└── vision/          — long-term direction narrative
-.claude/             — Claude Code harness (hooks, slash commands, settings)
+├── adr/             — historical and load-bearing architectural decisions
+├── progress.md      — implementation progress ledger
+├── superpowers/     — specs and incremental implementation plans
+└── vision/          — long-term direction
+.claude/             — Claude Code development harness
 ```
+
+Historical ADRs may describe decisions that the new direction will revisit.
+They should remain as records of why the current walking skeleton looks the
+way it does until superseding decisions are made through implementation work.
 
 ---
 
 ## Why "quark"
 
-The smallest things, composing into larger structures. Also a nod to
-Quarkus.
+The name started as a nod to Quarkus.
+
+It still fits the project independently: a quark is a small fundamental
+building block, which matches the goal of keeping agent execution semantics
+small, explicit, and composable rather than growing into an application
+framework of its own.
 
 ---
 
 ## Status
 
-The repository is in the MVP bootstrap phase. Versioning starts at
-`0.0.0` and bumps through [release-please](docs/adr/0005-release-please-automation.md)
-once feature commits land on `main`.
+Quark is experimental and evolving.
+
+The typed event-driven runtime exists today, but it is still hosted by and
+coupled to Quarkus/Mutiny. Framework independence, Kotlin/Coroutines, richer
+control semantics, replay, and broader integrations are design directions,
+not implemented capabilities.
