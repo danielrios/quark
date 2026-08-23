@@ -197,7 +197,21 @@ general-purpose distributed workflow engine by default.
 
 ## Near-term migration direction
 
-The next engineering phase is expected to proceed incrementally:
+The migration decision, its increments, and the framework-independence milestone criteria
+are recorded in [ADR 0008](docs/adr/0008-framework-independent-runtime-and-kotlin-migration.md).
+
+Active sequence (sequencing labels, not module designs):
+
+```text
+Phase 0     — restore green baseline            (done, 2026-08-23)
+Migration 1 — Kotlin and Coroutines build support   (next)
+Migration 2 — lock streaming/cancellation semantics (likely; closes G-1/G-2)
+Migration 3 — framework-neutral Kotlin runtime contracts (likely)
+later       — runtime implementation, framework-ownership removal,
+              provider-boundary evolution, host integrations
+```
+
+The work itself proceeds incrementally:
 
 1. introduce Kotlin alongside Java;
 2. preserve current runtime behavior through tests;
@@ -233,14 +247,22 @@ The original MVP sequence remains useful historical context:
 | 2 | landed | bounded conversation memory + `/reset` |
 | 3 | landed | streaming Telegram responses |
 | 4 | landed | extract `AgentRuntime`, `AgentEvent`, `ModelGateway`, `ChatMemoryStore` |
-| 5 | originally next | second provider + provider selection/status |
-| 6 | originally pending | REST/SSE adapter |
-| 7 | originally pending | architecture enforcement + metrics |
+| 5 | **paused — preserved as WIP** on `archive/plan-5-nim-provider-wip` | second provider + provider selection/status |
+| 6 | historical plan, re-evaluate | REST/SSE adapter |
+| 7 | historical plan, re-evaluate | architecture enforcement + metrics |
 
 Plans 5–7 were defined before the framework-independent runtime direction.
 They remain historical design intent, but they should not be executed
 mechanically as the current roadmap. Their requirements need to be
 re-evaluated against the new migration direction.
+
+Plan 5's in-flight implementation (NIM provider + provider preference) was
+paused before completion and preserved as an experiment on
+`archive/plan-5-nim-provider-wip` (with archive notes; the snapshot does not
+compile — see the notes). NIM remains a candidate second-provider integration
+once the neutral provider boundary exists (ADR 0008, Migration 3 onward); the
+provider-selection semantics it sketched are re-evaluated, not carried forward
+automatically.
 
 For mutable implementation state, use [`docs/progress.md`](docs/progress.md).
 
@@ -253,7 +275,8 @@ Key records include:
 - [ADR 0001](docs/adr/0001-event-driven-agentevent-stream.md) — why execution became a typed event stream;
 - [ADR 0002](docs/adr/0002-single-quarkus-module-archunit-boundaries.md) — why the current implementation chose a single Quarkus module;
 - [ADR 0003](docs/adr/0003-walking-skeleton-first-plan-sequencing.md) — why runtime abstractions were extracted only after the conversational loop worked;
-- [ADR 0007](docs/adr/0007-agent-runtime-owns-conversation-memory.md) — why the runtime owns conversation memory semantics.
+- [ADR 0007](docs/adr/0007-agent-runtime-owns-conversation-memory.md) — why the runtime owns conversation memory semantics;
+- [ADR 0008](docs/adr/0008-framework-independent-runtime-and-kotlin-migration.md) — the framework-independent Kotlin/JVM migration decision and milestone acceptance criteria.
 
 ADRs are historical records. When assumptions change, supersede decisions;
 do not edit history.
