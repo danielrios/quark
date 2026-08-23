@@ -247,7 +247,7 @@ The original MVP sequence remains useful historical context:
 | 2 | landed | bounded conversation memory + `/reset` |
 | 3 | landed | streaming Telegram responses |
 | 4 | landed | extract `AgentRuntime`, `AgentEvent`, `ModelGateway`, `ChatMemoryStore` |
-| 5 | **paused — preserved as WIP** on `archive/plan-5-nim-provider-wip` | second provider + provider selection/status |
+| 5 | **abandoned before completion** | second provider + provider selection/status |
 | 6 | historical plan, re-evaluate | REST/SSE adapter |
 | 7 | historical plan, re-evaluate | architecture enforcement + metrics |
 
@@ -257,12 +257,12 @@ mechanically as the current roadmap. Their requirements need to be
 re-evaluated against the new migration direction.
 
 Plan 5's in-flight implementation (NIM provider + provider preference) was
-paused before completion and preserved as an experiment on
-`archive/plan-5-nim-provider-wip` (with archive notes; the snapshot does not
-compile — see the notes). NIM remains a candidate second-provider integration
-once the neutral provider boundary exists (ADR 0008, Migration 3 onward); the
-provider-selection semantics it sketched are re-evaluated, not carried forward
-automatically.
+discarded after Phase 0 restored the pre-Plan-5 baseline. The experiment was
+small, incomplete, non-compiling, and coupled provider selection more deeply
+to CDI — exactly the direction ADR 0008 is reversing. NIM itself remains a
+candidate second-provider integration once the neutral provider boundary
+exists; if that need returns, it should be implemented fresh against the new
+boundary rather than porting the abandoned design.
 
 For mutable implementation state, use [`docs/progress.md`](docs/progress.md).
 

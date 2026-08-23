@@ -15,11 +15,13 @@ contracts work (Migration 3); a minimal Java<->Kotlin interoperability smoke tes
 toolchain. Build stays green; no runtime behavior changes; no existing Java class migrates.
 
 **Precondition (Phase 0) — DONE, 2026-08-23:** the unfinished Plan 5 experiment (NIM provider +
-provider preference) was preserved on branch `archive/plan-5-nim-provider-wip` (snapshot
-commit `27405ac`, with archive notes in `docs/archive/plan-5-nim-provider-wip.md` on that
-branch), removed from the active baseline, and the restored tree verified green:
-`./gradlew test` (53 tests, 0 failures), `spotlessCheck`, `build`. This PR starts from that
-baseline and re-proves it as its first task.
+provider preference) was intentionally discarded after the pre-Plan-5 runtime was restored.
+The experiment was small, incomplete, non-compiling, and coupled orchestration more deeply
+to CDI; it is not a compatibility target for the migration. NIM remains only a future
+candidate second provider, to be implemented fresh against the neutral provider boundary if
+that need returns. The restored baseline was verified green with `./gradlew test` (53 tests,
+0 failures), `spotlessCheck`, and `build`. Migration 1 starts from that baseline and re-proves
+it as its first task.
 
 **Tech stack:** Java 25 (unchanged), Gradle 9.5.1 + Kotlin JVM plugin (latest stable at
 implementation time), Kotlin stdlib, `kotlinx-coroutines-core`. Existing Quarkus 3.35.4
@@ -41,6 +43,8 @@ stack untouched.
   before a test needs it.
 - No Kotlin DSL rewrite of `build.gradle.kts` (it already is `.kts`).
 - No runtime, contract, or test behavior changes of any kind.
+- No NIM/provider-preference revival. A second provider belongs after the neutral provider
+  boundary exists and should be implemented against that boundary from scratch if still useful.
 
 ---
 
