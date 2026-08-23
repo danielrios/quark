@@ -1,6 +1,6 @@
 # 0002 — Single Quarkus module, with package boundaries enforced by ArchUnit at the refactor phase
 
-**Status:** Accepted, 2026-05-25. The single-module decision applies now; ArchUnit enforcement lands with Plan 7 per [ADR 0003](0003-walking-skeleton-first-plan-sequencing.md).
+**Status:** Accepted, 2026-05-25. The single-module decision applies now; ArchUnit enforcement lands with Plan 7 per [ADR 0003](0003-walking-skeleton-first-plan-sequencing.md). **Superseded in part** by [ADR 0008](0008-framework-independent-runtime-and-kotlin-migration.md), 2026-08-23 — quark will not remain a single *Quarkus application* module; Quarkus becomes an optional host. The single-Gradle-module pragmatics and package-level boundaries carry forward during the migration.
 **Deciders:** Daniel + architecture brainstorming sessions.
 
 **Related documents:**

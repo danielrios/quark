@@ -28,3 +28,5 @@ zero-padded sequence number starting at `0001`. Do not reuse numbers.
 | [0004](0004-claude-code-harness.md) | Claude Code harness configuration | Accepted |
 | [0005](0005-release-please-automation.md) | Release automation with release-please | Accepted |
 | [0006](0006-application-scoped-ai-service-for-memory.md) | `@ApplicationScoped` AI service for cross-request conversation memory | Accepted |
+| [0007](0007-agent-runtime-owns-conversation-memory.md) | `AgentRuntime` owns conversation memory; the `@RegisterAiService` `Assistant` is retired | Accepted |
+| [0008](0008-framework-independent-runtime-and-kotlin-migration.md) | Framework-independent runtime and the Kotlin/JVM migration | Accepted (supersedes ADR 0002 in part) |
