@@ -1,97 +1,149 @@
 # The Quark Manifesto
 
-Most modern AI frameworks optimize for abstraction, automation, and hidden
-orchestration.
+Quark exists to make agent execution explicit.
 
-Quark optimizes for the opposite.
+The project is intentionally narrow: it should provide clear execution
+semantics without trying to become the framework that owns the whole agent
+stack.
 
 ---
 
 ## Explicit over magical
 
-Agent execution should be inspectable.
+Agent execution should be understandable by reading the code and observing
+runtime events.
 
-Every meaningful action should be visible:
-
-* model calls,
-* memory loads,
-* streamed output,
-* tool invocations,
-* planning steps,
-* failures.
+Meaningful behavior should not disappear inside hidden orchestration. When a
+capability becomes part of execution, its state transitions and decisions
+should be inspectable.
 
 A runtime should not behave like a black box.
 
 ---
 
-## Streaming is the default
+## Streaming is the execution model
 
-Streaming is not a UI feature.
+Streaming is not a UI optimization.
 
-It is the natural execution model for systems that produce tokens, tool
-calls, and intermediate state over time.
+Agent execution unfolds over time. Tokens, lifecycle transitions, tool calls,
+policy decisions, failures, and recovery signals are temporal events.
 
-Responses should arrive incrementally, propagate cleanly through transports,
-and remain observable while they are happening.
-
----
-
-## Small systems compose better
-
-Quark prefers small, understandable components over layered framework
-abstractions.
-
-A flat module with five well-named files beats a four-layer architecture
-nobody can hold in their head.
+The concrete streaming primitive may change. The semantic commitment should
+not: execution is a progression of meaningful events, not only a final
+response string.
 
 ---
 
-## Architecture must earn itself
+## Transport is not runtime
 
-Abstractions emerge from real pressure, not speculation.
+Telegram, HTTP, SSE, WebSocket, CLI, voice, and future transports are delivery
+mechanisms.
 
-The MVP stays intentionally small and direct. Runtime seams (`AgentRuntime`,
-`AgentEvent`, provider gateways) appear only when there is concrete code
-that justifies their shape.
+They project execution. They do not define it.
 
-Designing them up front would produce abstractions that fit a document
-better than they fit the runtime.
+Adapters should render runtime behavior without owning orchestration.
 
 ---
 
-## Events are the destination
+## Framework is not runtime
 
-The long-term runtime is event-driven because intelligent systems produce
-more than text.
+The runtime must not belong to the application framework hosting it.
 
-Tokens, tool calls, plans, memory retrievals, reflections, failures, and
-decisions are all execution events. Text is only one projection of them.
+Frameworks may provide lifecycle, dependency injection, configuration,
+networking, and integrations. Those are host concerns.
 
-The MVP does not implement this yet. The MVP streams strings. The
-event-stream contract is introduced later, once real adapters exist to
-shape it. See [ADR 0001](docs/adr/0001-event-driven-agentevent-stream.md)
-and [ADR 0003](docs/adr/0003-walking-skeleton-first-plan-sequencing.md).
+Quark's execution semantics should remain independent enough to embed inside
+different JVM environments.
+
+Framework integrations are welcome. Framework ownership of the runtime is
+not.
 
 ---
 
-## Observable by design
+## Observability is part of execution
 
-A good agent runtime makes debugging easier, not harder.
+A good runtime should make answering "what happened?" straightforward.
 
-Execution flow, timing, memory state, provider behavior, and transport
-projection should remain traceable and measurable from day one — even when
-the runtime itself is small.
+Execution should expose enough structured state that logs, metrics, traces,
+timelines, cost attribution, and debugging tools can be projections of the
+runtime rather than the only place where runtime behavior can be inferred.
 
 Operational clarity is a feature.
 
 ---
 
-## Transport is not the runtime
+## Control should be explicit
 
-Telegram, REST, SSE, CLI — these are delivery mechanisms.
+Production agents eventually need constraints that do not belong inside
+prompts.
 
-The runtime must remain independent of presentation. Adapters render; they
-do not orchestrate.
+Permissions, approvals, budgets, timeouts, cancellation, provider
+restrictions, and similar decisions should become explicit runtime semantics
+when real use cases justify them.
+
+Quark should not hide control policy inside conventions that are difficult to
+observe or test.
+
+---
+
+## Small systems compose better
+
+Quark prefers small contracts and understandable components over framework
+hierarchies that try to predict every future use case.
+
+The runtime should provide the semantics it is uniquely responsible for and
+integrate with the surrounding ecosystem for the rest.
+
+---
+
+## Abstractions must earn themselves
+
+Architecture emerges from pressure, not fashion.
+
+New layers, plugin systems, module boundaries, policy languages, workflow
+engines, or orchestration concepts should not exist merely because similar
+projects have them.
+
+A new abstraction must solve a demonstrated problem.
+
+---
+
+## Integrate instead of replace
+
+Quark should participate in the JVM and distributed-systems ecosystems rather
+than rebuild adjacent systems unnecessarily.
+
+The goal is not to own the entire agent stack.
+
+The goal is to provide a focused execution layer that works with different
+ways of building and hosting agents.
+
+---
+
+## Production semantics over demo convenience
+
+Prototype agents optimize for producing a useful response quickly.
+
+Production agents eventually need stronger semantics around lifecycle,
+cancellation, failure visibility, tracing, policy enforcement, testability,
+compatibility, and recovery.
+
+Quark should orient its architecture toward those problems without pretending
+they are all solved today and without making the runtime large for their own
+sake.
+
+---
+
+## Open source should remain operationally complete
+
+The runtime layer should remain useful without a hosted service.
+
+Execution contracts, local enforcement, observability hooks, test utilities,
+and local debugging capabilities should not depend on a remote control plane
+to function.
+
+A future hosted product may coordinate organization-wide concerns, but it
+must not become a prerequisite for local agent execution.
 
 ---
 
@@ -99,22 +151,27 @@ do not orchestrate.
 
 Quark is not:
 
-* an "AGI framework",
-* a general-purpose abstraction layer,
-* a low-code automation platform,
-* a collection of magical chains.
+- a personal assistant product;
+- an all-in-one agent platform;
+- a replacement for agent frameworks or provider SDKs;
+- an application or web framework;
+- a mandatory dependency-injection container;
+- a general-purpose workflow engine;
+- an "AGI framework."
 
-The goal is a compact execution runtime where reasoning, orchestration,
-streaming, and memory remain explicit.
+Narrowness is a feature.
 
 ---
 
 ## Build the smallest thing that can evolve
 
-Quark starts as a tiny conversational service: receive a message, call
-Gemini, stream a reply, remember a few turns.
+Every increment should remain understandable and runnable.
 
-The ambition is long-term. The implementation stays grounded.
+Every migration should preserve observable behavior where that behavior is
+still desired.
 
-Every increment is end-to-end runnable. Every abstraction is extracted
-from working code, not invented for it.
+Every abstraction should come from pressure.
+
+The ambition can be long-term.
+
+The implementation stays grounded.

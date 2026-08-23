@@ -1,140 +1,169 @@
 # Long-term direction
 
-This document describes where `quark` is headed *after* the MVP is
-working. It is not a roadmap with dates, and none of what follows
-implies an active workstream — see [README](../../README.md) and
-[ARCHITECTURE](../../ARCHITECTURE.md) for what is actually being built
-right now.
+Quark is evolving toward a small, embeddable agent execution runtime for the
+JVM.
 
-The MVP exists to validate the conversational loop. This document
-exists to make the destination explicit so the MVP can be shaped to
-evolve into it without rewrites.
+This document explains the product thesis behind that direction. It does not
+describe shipped capability. Read [`README.md`](../../README.md) for how to run
+Quark today and [`ARCHITECTURE.md`](../../ARCHITECTURE.md) for the canonical
+technical state and migration direction.
 
----
+The thesis is simple:
 
-## Why a runtime, not a chatbot
+> building an agent is becoming easier; operating agent behavior inside real
+> systems with clear execution semantics is still hard.
 
-A typical AI application couples six concerns tightly together:
-
-* transport (HTTP, WebSocket, Telegram, ...),
-* orchestration (what happens in what order),
-* provider SDKs (OpenAI, Gemini, Anthropic, ...),
-* memory (history, context, retrieval),
-* rendering (how the response is presented),
-* business logic.
-
-That coupling produces systems that demo well and are painful to
-change. Adding a tool means touching transport. Switching providers
-means touching rendering. Adding planning means rewriting the response
-loop.
-
-`quark` separates these concerns through one structural decision:
-
-> the runtime emits a typed stream of execution events; everything else
-> is a consumer of that stream.
-
-A turn is not "send prompt, return string." A turn is a typed
-execution lifecycle — model invocation, token output, memory load,
-eventual tool call or plan step — emitted as observable events. Transport
-adapters project the stream into whatever shape their channel needs.
-
-The MVP does not implement this yet. It streams strings. The
-event-stream contract is the destination, not the starting point.
-[ADR 0001](../adr/0001-event-driven-agentevent-stream.md) records the
-decision; [ADR 0003](../adr/0003-walking-skeleton-first-plan-sequencing.md)
-records the sequencing.
+Quark should focus on that execution layer.
 
 ---
 
-## Design principles
+## The production problem
 
-These principles guide both the MVP and the destination. They are not
-slogans; each one constrains specific decisions.
+Different teams may build agents with different libraries, provider SDKs, and
+application frameworks. That freedom is useful, but organizations eventually
+still need common answers to questions such as:
 
-### Streaming-first
+- what happened during this execution?
+- which model/provider participated?
+- which external actions were requested?
+- what policy allowed or denied them?
+- how long did each phase take?
+- where did a turn fail?
+- can execution be cancelled, tested, diagnosed, or recovered?
 
-Streaming is the native execution model, not an enhancement layer.
+Quark should provide a common execution boundary without requiring every team
+to adopt the same higher-level agent framework.
 
-The runtime is built around incremental token flow, lifecycle events,
-cancellation, partial execution, and transport projection. Adapters do
-not block on full responses; they react to events as they arrive.
+```text
+agent frameworks / provider SDKs / custom agent logic
+                         │
+                         ▼
+                       Quark
+                         │
+        explicit agent execution semantics
+```
 
-### Observable by default
-
-The runtime emits structured execution events as part of its contract,
-not as instrumentation glued on later. Logs, metrics, traces, and
-replay tooling all consume the same event stream. Operational clarity
-is built into the architecture rather than retrofitted.
-
-### Additive evolution
-
-New capabilities — tools, planning, retrieval, reflection, retries,
-multi-agent coordination — must compose into the runtime by introducing
-new pipeline stages and new event variants. They must not require
-reshaping existing execution flows.
-
-If a planned capability would require touching `AgentRuntime`'s public
-contract, that is a signal that either the capability is wrong, or the
-contract is.
-
-### Transport-agnostic execution
-
-REST, SSE, Telegram, CLI, future UIs — these are all projections of the
-same event stream. The runtime does not know which transport is
-rendering its events, and providers do not know either.
-
-### JVM-native
-
-Java 25 and Quarkus, with virtual threads, Mutiny streams, and strong
-typing. The point is not to reimplement Python frameworks on the JVM;
-it is to take advantage of what the JVM offers — predictable
-concurrency, structured types, mature observability tooling — for
-something this domain has not historically had.
+The goal is not to own prompts, RAG, every provider integration, workflow
+orchestration, or application lifecycle. Those concerns should remain with
+systems better suited to them.
 
 ---
 
-## What the destination enables
+## What Quark should become useful for
 
-Once the runtime seams from [ADR 0003](../adr/0003-walking-skeleton-first-plan-sequencing.md)
-Plan 4 are in place, the following become additive changes rather than
-rewrites:
+The long-term value is strongest in concerns that appear after a prototype
+works:
 
-* tool execution as a runtime stage, with `ToolInvoked` /
-  `ToolCompleted` event variants;
-* planner / executor decomposition over the same event stream;
-* memory backends behind `ChatMemoryStore` (Redis, Postgres, vector
-  stores);
-* reflection loops that consume one turn's events and produce input for
-  the next;
-* multiple providers behind `ModelGateway`, with per-session preference
-  and failover;
-* persistent event storage and turn replay for debugging.
+- consistent execution lifecycle and correlation;
+- model/provider visibility;
+- tool/action visibility;
+- latency and cost attribution;
+- explicit cancellation and timeout semantics;
+- policy and approval boundaries;
+- observability integrations;
+- deterministic testing surfaces;
+- replay for debugging;
+- recovery/checkpoint semantics where justified;
+- integration with durable execution infrastructure rather than replacement of it.
 
-Each of these is a deferred concern, not a planned feature. None of
-them get built before the conversational loop is validated and the
-runtime seams have been extracted.
+These are areas of exploration, not a committed feature checklist.
 
----
-
-## What `quark` is not
-
-Stated explicitly so it stays explicit:
-
-* not a no-code or low-code platform,
-* not a prompt wrapper,
-* not a frontend product,
-* not a general-purpose orchestration framework,
-* not an attempt to build an "AGI platform."
-
-A runtime. Small enough to read; structured enough to grow.
+The project should add capabilities incrementally and only after concrete use
+cases justify their shape.
 
 ---
 
-## Why the name
+## Ecosystem position
 
-A quark is one of the elementary constituents of matter — small, never
-observed in isolation, responsible for everything larger. The runtime
-follows the same idea: small execution units, composable stages,
-observable interactions, emergent behaviour from orchestration.
+Quark should complement the JVM ecosystem rather than compete with all of it.
 
-Also a direct nod to Quarkus.
+A team might build agent logic with Spring AI, LangChain4j, a provider SDK, or
+custom code and still use Quark for execution semantics. A Quark runtime may
+be hosted by Spring Boot, Quarkus, Ktor, Micronaut, or a plain JVM process.
+
+Those relationships are intentional, but the corresponding integration APIs
+have not been designed yet.
+
+The project's value should come from the execution layer being useful across
+those choices.
+
+---
+
+## Open-source-first runtime
+
+The runtime should remain operationally useful without a hosted Quark service.
+
+A reasonable open-source boundary includes the capabilities necessary to run,
+observe, constrain, test, and debug execution locally, plus ecosystem
+integrations that make the runtime adoptable.
+
+A separate commercial product may eventually make sense when organizations
+need coordination across many services and teams. Examples include:
+
+- fleet and runtime inventory;
+- centralized policy distribution;
+- hosted trace storage and search;
+- team-level cost/latency analytics;
+- approval workflows;
+- RBAC / SSO;
+- immutable audit and governance;
+- agent/runtime registry;
+- managed evaluations;
+- enterprise deployment and support.
+
+This is a possible product boundary, not a current product commitment.
+
+One constraint should survive any future commercialization:
+
+> the local runtime must not require a hosted control plane in order to keep
+> executing according to local configuration.
+
+That keeps the open-source runtime trustworthy and keeps the commercial value
+focused on organization-wide operations rather than artificial lock-in.
+
+---
+
+## Deliberate boundaries
+
+Quark should remain narrower than an all-in-one AI platform.
+
+It should not need to become:
+
+- a personal-assistant distribution;
+- a general-purpose agent framework;
+- a provider-SDK collection;
+- an application/web framework;
+- a no-code platform;
+- a general-purpose workflow engine;
+- a distributed durable-execution system.
+
+Narrowness is part of the product strategy: a focused runtime is easier to
+embed, understand, trust, and integrate.
+
+---
+
+## How the project should evolve
+
+The long-term direction should not dictate a speculative module graph or a
+large set of abstractions in advance.
+
+The immediate technical migration belongs in [`ARCHITECTURE.md`](../../ARCHITECTURE.md).
+This vision only sets the decision filter:
+
+1. does the capability improve agent execution itself?
+2. does it make execution easier to observe, control, test, or recover?
+3. is Quark the right layer to own it, or should Quark integrate with an existing system?
+4. has a real use case earned the abstraction?
+
+If the answer to those questions is weak, the feature probably does not belong
+in the core runtime.
+
+---
+
+## Why the name still fits
+
+The name began as a nod to Quarkus.
+
+It also fits the intended product independently: a small fundamental building
+block that participates in larger systems without trying to become the whole
+system.

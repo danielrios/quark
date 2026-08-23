@@ -1,282 +1,259 @@
 # Architecture
 
-Three states live in this document, and they are deliberately
-different:
+This document is the canonical technical description of Quark's current
+implementation and the architectural direction that follows from it.
 
-* **Bootstrap state (historical)** — a generated Quarkus skeleton.
-  Superseded by Plans 1–4; kept for the record.
-* **MVP target (Plans 1–3, landed)** — the conversational runtime
-  shape: one flat module, direct provider calls, string streaming.
-  Shipped as Telegram polling + Gemini (Plan 1), bounded per-session
-  memory + `/reset` (Plan 2), streaming via throttled edits (Plan 3).
-* **Destination (Plans 4–7+) — core seams landed in Plan 4.** The
-  event-driven runtime: layered packages, `AgentRuntime` orchestration,
-  typed `Multi<AgentEvent>` stream. As of Plan 4 the `core`, `runtime`,
-  `memory`, `provider.gemini`, and `adapter.telegram` packages below
-  exist and carry production traffic (see [ADR 0007](docs/adr/0007-agent-runtime-owns-conversation-memory.md));
-  Plans 5–7 add the NIM provider, the REST/SSE adapter, and
-  ArchUnit + Micrometer enforcement.
-
-[ADR 0003](docs/adr/0003-walking-skeleton-first-plan-sequencing.md)
-explains why the project ships the first one before reaching for the
-second.
-
-Detail lives in:
-
-* MVP design spec — [`docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md`](docs/superpowers/specs/2026-05-25-agent-runtime-mvp.md)
-* Decision records — [`docs/adr/`](docs/adr/)
-* Long-term direction — [`docs/vision/runtime-platform.md`](docs/vision/runtime-platform.md)
-* Implementation plans — [`docs/superpowers/plans/`](docs/superpowers/plans/)
+For principles, read [`MANIFESTO.md`](MANIFESTO.md). For the long-term product
+thesis, read [`docs/vision/runtime-platform.md`](docs/vision/runtime-platform.md).
 
 ---
 
-# Bootstrap state — right now
+## Current architecture
 
-The current source tree contains:
-
-* a generated `GreetingResource` exposing `GET /hello`,
-* `quarkus-langchain4j-core` on the classpath,
-* an empty `application.properties`,
-* the harness under `.claude/`, Spotless, release-please, and CI.
-
-There is no `ChatService`, no Telegram code, no Gemini wiring, no
-memory. Everything below the "MVP target" header is **what the next
-plans build**, not what runs today.
-
----
-
-# MVP target — Plans 1–3
-
-The MVP delivers a single conversational loop, end-to-end. No runtime
-abstractions, no provider SPI, no event stream, no ArchUnit boundaries.
-
-> Until Plans 1–3 land, none of the names in this section exist in the
-> source tree. They are the target shape, recorded so contributors
-> agree on what is being built before code starts moving.
-
-## Pipeline
+Quark currently runs as a Java + Quarkus application. The runtime seams were
+extracted from a working Telegram -> Gemini conversational loop rather than
+designed speculatively.
 
 ```text
-Incoming message (Telegram update | POST /chat)
-        │
-        ▼
-ChatService.chat(sessionId, message)
-        │
-        ├─ load history from ChatMemory (in-memory, bounded)
-        │
-        ├─ append user message
-        │
-        ├─ GeminiChatClient.stream(history) → Multi<String>
-        │
-        ├─ accumulate tokens
-        │
-        ├─ persist assistant reply into ChatMemory
-        │
-        └─ return reply
-            │
-            ▼
-    Transport-specific rendering
-    ├─ REST  → full body
-    ├─ SSE   → `data: <token>` frames
-    └─ Telegram → throttled message edits
+Telegram update
+      │
+      ▼
+Telegram adapter
+      │
+      ▼
+TurnRequest
+      │
+      ▼
+AgentRuntime.execute(TurnRequest)
+      │
+      ├── load history through ChatMemoryStore
+      ├── build prompt
+      ├── invoke ModelGateway
+      ├── map streamed chunks to AgentEvent.TokenEmitted
+      ├── persist the completed turn
+      └── emit one terminal AgentEvent
+              │
+              ▼
+       Telegram renderer
 ```
 
-One service. One provider. One memory implementation. One shape of
-streaming output (`Multi<String>`).
+The current public runtime contract is:
 
-## Package layout
+```java
+Multi<AgentEvent> execute(TurnRequest request)
+```
+
+`AgentEvent` currently contains:
+
+- `TurnStarted`
+- `MemoryLoaded`
+- `ModelInvoked`
+- `TokenEmitted`
+- `ModelCompleted`
+- `TurnCompleted`
+- `TurnFailed`
+
+Every event carries a `turnId`. A turn ends with one terminal event and then
+the stream completes normally.
+
+### Current package boundaries
 
 ```text
 com.quark
-├── chat/
-│   ├── ChatService.java       — orchestration: memory → model → persist
-│   ├── ChatMemory.java        — Map<sessionId, List<ChatMessage>>, bounded
-│   ├── ChatMessage.java       — role + content record
-│   └── GeminiChatClient.java  — thin langchain4j wrapper
-├── telegram/
-│   ├── TelegramBotRunner.java — startup hook + polling loop on virtual thread
-│   ├── TelegramMessageHandler.java — dispatch updates to ChatService
-│   └── TelegramRenderer.java  — throttled edits, message splitting
-├── rest/
-│   └── ChatResource.java      — POST /chat, POST /chat/stream, GET /history/{id}
-├── config/
-│   └── AppConfig.java         — config record(s), Telegram enable flag
-└── shared/
-    └── (helpers, if any)
+├── core/        — execution contracts and shared types
+├── runtime/     — AgentRuntime orchestration
+├── memory/      — ChatMemoryStore + in-memory implementation
+├── provider/    — ModelGateway + Gemini implementation
+└── adapter/     — transport adapters and renderers
 ```
 
-Flat by design. There is no `core/runtime/provider/adapter` split yet
-because nothing inside the MVP would benefit from one.
+The useful boundaries are conceptual:
 
-## What the MVP intentionally does not do
-
-| Concern                  | Status in MVP                                |
-|--------------------------|----------------------------------------------|
-| `AgentRuntime`           | not present; `ChatService` orchestrates directly |
-| `AgentEvent` / typed stream | not present; runtime emits `Multi<String>` |
-| Provider abstraction     | not present; `GeminiChatClient` is concrete |
-| Second provider (NIM)    | deferred; arrives with the runtime refactor |
-| ArchUnit boundaries      | deferred to the same refactor                |
-| Micrometer metrics       | logs + correlation id only                  |
-| Tools, planning, reflection | not in scope                              |
-| Episodic memory, vector search | not in scope                           |
-| Webhook Telegram mode    | deferred                                     |
-| Retry policies           | one attempt, fail fast                       |
-| Multi-tenancy            | not in scope                                 |
-
-This list is not aspirational; it is the contract for what does **not**
-get built before the conversational loop is validated.
-
-## Observability in the MVP
-
-Minimal but real, once Plans 1–3 land:
-
-* structured logs, JSON-shaped where Quarkus defaults allow,
-* per-turn `turnId` (correlation id) on every log line in the turn,
-* provider latency logged on each model call.
-
-No metrics pipeline yet. The destination metrics design lives in the
-ADRs and arrives with the runtime refactor.
+- transports project execution; they do not orchestrate it;
+- runtime code should not depend on concrete transports;
+- provider-specific code stays behind a provider boundary;
+- memory stays replaceable behind a store boundary;
+- execution events remain transport-neutral.
 
 ---
 
-# Destination — the event-driven runtime
+## Current framework coupling
 
-**Status (Plan 4, 2026-07-04):** the core of this section is now real.
-`AgentRuntime.execute(TurnRequest) : Multi<AgentEvent>` orchestrates
-every Telegram turn; memory goes through the `ChatMemoryStore` SPI
-(runtime-owned, ADR 0007); Gemini sits behind `ModelGateway` in the only
-langchain4j-touching package. Still pending: `ProviderPreferenceStore` +
-NIM (Plan 5), the REST/SSE adapter and `config/` wiring package
-(Plan 6), ArchUnit enforcement + Micrometer (Plan 7).
+The runtime is not framework-independent yet.
 
-## Pipeline
+Today:
+
+- `AgentRuntime` is CDI-managed (`@ApplicationScoped`, `@Inject`);
+- runtime streaming exposes SmallRye Mutiny `Multi`;
+- `ModelGateway` exposes `Multi<String>`;
+- Quarkus owns application startup, DI, configuration, and host lifecycle;
+- Quarkus logging is used inside the runtime;
+- Gemini uses Quarkus LangChain4j integration;
+- the build is a single Quarkus application module.
+
+These are properties of the current walking skeleton, not architectural
+principles to preserve indefinitely.
+
+The single-module decision is recorded in
+[ADR 0002](docs/adr/0002-single-quarkus-module-archunit-boundaries.md). If the
+framework-independent runtime invalidates that decision, a new ADR should
+supersede it instead of rewriting history.
+
+---
+
+## Architectural direction
+
+The destination is not "replace Quarkus with another application framework."
+
+The destination is:
 
 ```text
-IncomingMessage (REST body | Telegram update)
-        │
-        ▼
-Adapter → TurnRequest(sessionId, provider?, message)
-        │
-        ▼
-AgentRuntime.execute(TurnRequest) : Multi<AgentEvent>
-        │
-        ├─ load history     (ChatMemoryStore)
-        ├─ resolve provider (ProviderPreferenceStore)
-        ├─ build request    (system prompt + history + message)
-        ├─ invoke gateway   (ModelGateway.stream)
-        ├─ map provider events → AgentEvent
-        ├─ accumulate assistant text
-        ├─ persist completed turn
-        └─ emit terminal event (TurnCompleted | TurnFailed)
-                │
-                ▼
-        Transport renderer
-        ├─ SSE — one frame per AgentEvent
-        ├─ Telegram — throttled edits driven by TokenEmitted
-        └─ future transports
+Host application
+       │
+       ▼
+   Quark runtime
 ```
 
-Future stages — tool execution, planning, retrieval, reflection — slot
-in as additional pipeline stages emitting additional `AgentEvent`
-variants. They extend the stream; they do not reshape it.
+where the host may be Spring Boot, Quarkus, Ktor, Micronaut, plain JVM, a CLI
+process, or another compatible JVM environment.
 
-## Package layout
+Three invariants guide this transition:
 
 ```text
-com.quark
-├── core/        — pure contracts and shared types. No Quarkus, no langchain4j, no transports.
-├── runtime/     — AgentRuntime orchestration, event emission, MDC propagation.
-├── memory/      — ChatMemoryStore SPI + in-process implementation.
-├── provider/    — ModelGateway SPI + provider implementations.
-│   ├── gemini/
-│   └── nim/
-├── adapter/     — transport adapters and renderers.
-│   ├── rest/
-│   └── telegram/
-└── config/      — wiring.
+Transport != Runtime
+Framework != Runtime
+Agent Framework != Runtime
 ```
 
-Single Quarkus module. Boundaries enforced by ArchUnit tests, not by
-Gradle subprojects — see
-[ADR 0002](docs/adr/0002-single-quarkus-module-archunit-boundaries.md).
-
-## Event model
-
-`AgentEvent` is a sealed interface representing the runtime lifecycle.
-Initial variants:
-
-* `TurnStarted`
-* `MemoryLoaded`
-* `ModelInvoked`
-* `TokenEmitted`
-* `ModelCompleted`
-* `TurnCompleted`
-* `TurnFailed`
-
-Every event carries a `turnId`. The runtime guarantees exactly one
-terminal event (`TurnCompleted` or `TurnFailed`), after which the
-`Multi` completes normally. Renderers therefore consume a deterministic
-lifecycle and do not need transport-specific error channels.
-
-Rationale: [ADR 0001](docs/adr/0001-event-driven-agentevent-stream.md).
-
-## Boundaries
-
-| Layer       | May depend on                                    | May not depend on                            |
-|-------------|--------------------------------------------------|----------------------------------------------|
-| `core`      | nothing framework-specific                       | Quarkus, langchain4j, Jakarta REST, Telegram |
-| `runtime`   | `core`, `memory.*`, `provider` SPI               | concrete `provider.*`, `adapter.*`           |
-| `provider.<name>` | `core`, `provider` SPI, langchain4j         | `runtime`, `adapter.*`, other providers      |
-| `adapter.*` | `core`, `runtime`, `memory.preference`           | `provider.*`, other adapters, langchain4j    |
-| `memory.*`  | `core` (langchain4j only inside `memory.chat`)   | `runtime`, `adapter.*`, `provider.*`         |
-
-ArchUnit tests live under `src/test/java/.../archtest` and fail the
-build on violation. They apply to **production classes only**: the
-adapter *test* tree legitimately imports `provider.gemini` and
-langchain4j because the §8 memory backstops
-(`TelegramConversationMemoryTest`, `TelegramStreamingMemoryTest`) must
-fake the real model boundary.
-
-## Observability
-
-* Structured logs correlated by `turnId`.
-* Micrometer counters keyed by `AgentEvent` variant.
-* Per-turn timer.
-* Future tracing hooks inherit the same correlation id.
+Quarkus may become an optional first-class integration later. Spring AI,
+LangChain4j, provider SDKs, and custom agent logic may also sit above or
+alongside the runtime. The exact adapter shapes are intentionally undecided.
 
 ---
 
-# Bridge — how the MVP becomes the destination
+## Execution semantics
 
-The MVP and the destination are connected by an explicit plan sequence
-in [ADR 0003](docs/adr/0003-walking-skeleton-first-plan-sequencing.md):
+The runtime models a turn as a lifecycle rather than only a final response.
 
-| Plan | Status | What lands                                                    | Abstractions introduced                                |
-|------|--------|---------------------------------------------------------------|--------------------------------------------------------|
-| 1    | ✅ landed | Telegram polling + Gemini, one message in / one message out  | None. `@RegisterAiService` directly.                   |
-| 2    | ✅ landed | In-process working memory + `/reset`                          | None. Memory on the AI service (ADR 0006).             |
-| 3    | ✅ landed (PR #22) | Telegram streaming via throttled edits                        | None. Streaming stays Telegram-specific.               |
-| 4    | ✅ landed (ADR 0007) | Extract `AgentRuntime`, `AgentEvent`, `ModelGateway`, `ChatMemoryStore`; retire the AI service; layered packages | Core runtime seams.                                    |
-| 5    | next | NIM provider + `/provider` + `/status`                        | `ProviderPreferenceStore` + second gateway.            |
-| 6    | pending | REST + SSE adapter                                            | Second transport validates the event stream.           |
-| 7    | pending | ArchUnit boundaries + Micrometer observability                | Structural enforcement + operational visibility.       |
+Current execution already exposes:
 
-Plan 4 is the architectural inflection point. By the time it lands,
-Plans 1–3 have produced enough real behaviour (memory, streaming,
-provider interaction, Telegram constraints) that the runtime seams can
-be extracted from working code instead of speculated into existence.
+```text
+TurnStarted
+    ↓
+MemoryLoaded
+    ↓
+ModelInvoked
+    ↓
+TokenEmitted ...
+    ↓
+ModelCompleted
+    ↓
+TurnCompleted | TurnFailed
+```
+
+Future production pressure may justify additional semantics such as provider
+selection, tool requests, policy evaluation, approvals, cancellation,
+checkpoints, or resume. Those names are examples, not commitments to a schema.
+
+The durable principle is that meaningful runtime behavior should remain
+explicit and observable.
 
 ---
 
-# Where things go next
+## Observability, control, and reliability boundaries
 
-| Goal                                | Read                                                              |
-|-------------------------------------|-------------------------------------------------------------------|
-| Understand what runs today          | this document, "Bootstrap state" section                          |
-| Understand what's being built next  | the MVP design spec, and the "MVP target" section above           |
-| Understand architectural decisions  | `docs/adr/`                                                       |
-| Understand the long-term direction  | [`docs/vision/runtime-platform.md`](docs/vision/runtime-platform.md), [`MANIFESTO.md`](MANIFESTO.md) |
-| Know what is safe to implement now  | the next unfinished plan in `docs/superpowers/plans/`             |
-| Work with tooling / Claude Code     | [`CLAUDE.md`](CLAUDE.md) and [ADR 0004](docs/adr/0004-claude-code-harness.md) |
-| Add a new architectural capability  | spec → ADR → plan → implementation                                |
+These are directions, not a claim that all corresponding features exist.
+
+### Observability
+
+Current state:
+
+- `turnId` correlation exists;
+- lifecycle state is available through `AgentEvent`;
+- logging exists.
+
+Direction:
+
+- measure execution phases rather than only total request time;
+- expose provider/model/tool metadata when those concepts exist;
+- integrate with OpenTelemetry-oriented tooling;
+- keep proprietary telemetry optional.
+
+### Control
+
+If real use cases require permissions, approvals, budgets, provider
+restrictions, timeouts, or cancellation, those decisions should become
+explicit runtime semantics rather than hidden prompt instructions.
+
+No policy DSL or approval subsystem is defined yet.
+
+### Reliability
+
+Replay, checkpoint/resume, deterministic test surfaces, or integration with
+durable execution systems may become useful later. Quark should not rebuild a
+general-purpose distributed workflow engine by default.
+
+---
+
+## Near-term migration direction
+
+The next engineering phase is expected to proceed incrementally:
+
+1. introduce Kotlin alongside Java;
+2. preserve current runtime behavior through tests;
+3. move public streaming contracts away from Quarkus/Mutiny-specific types;
+4. migrate streaming semantics toward Kotlin Coroutines / `Flow`;
+5. make runtime construction and lifecycle independent from CDI;
+6. remove Quarkus from the runtime core gradually;
+7. retain Quarkus as a potential optional host integration;
+8. add new production semantics only when real use cases justify them.
+
+This sequence does not pre-decide:
+
+- final Gradle module topology;
+- PF4J or another plugin framework;
+- a harness layer;
+- a policy DSL;
+- multi-agent orchestration;
+- a workflow engine;
+- cloud APIs;
+- exact Spring AI / LangChain4j / Quarkus adapter shapes.
+
+Those decisions should be made through implementation pressure and ADRs.
+
+---
+
+## Historical plan sequence
+
+The original MVP sequence remains useful historical context:
+
+| Plan | Historical status | Purpose |
+| --- | --- | --- |
+| 1 | landed | Telegram + Gemini walking skeleton |
+| 2 | landed | bounded conversation memory + `/reset` |
+| 3 | landed | streaming Telegram responses |
+| 4 | landed | extract `AgentRuntime`, `AgentEvent`, `ModelGateway`, `ChatMemoryStore` |
+| 5 | originally next | second provider + provider selection/status |
+| 6 | originally pending | REST/SSE adapter |
+| 7 | originally pending | architecture enforcement + metrics |
+
+Plans 5–7 were defined before the framework-independent runtime direction.
+They remain historical design intent, but they should not be executed
+mechanically as the current roadmap. Their requirements need to be
+re-evaluated against the new migration direction.
+
+For mutable implementation state, use [`docs/progress.md`](docs/progress.md).
+
+---
+
+## Historical decisions
+
+Key records include:
+
+- [ADR 0001](docs/adr/0001-event-driven-agentevent-stream.md) — why execution became a typed event stream;
+- [ADR 0002](docs/adr/0002-single-quarkus-module-archunit-boundaries.md) — why the current implementation chose a single Quarkus module;
+- [ADR 0003](docs/adr/0003-walking-skeleton-first-plan-sequencing.md) — why runtime abstractions were extracted only after the conversational loop worked;
+- [ADR 0007](docs/adr/0007-agent-runtime-owns-conversation-memory.md) — why the runtime owns conversation memory semantics.
+
+ADRs are historical records. When assumptions change, supersede decisions;
+do not edit history.
