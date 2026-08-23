@@ -8,6 +8,7 @@ import com.quark.provider.gemini.RecordingStreamingChatModel;
 import com.quark.memory.ChatMemoryStore;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.model.chat.StreamingChatModel;
+import io.quarkiverse.langchain4j.ModelName;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.test.junit.QuarkusMock;
@@ -58,7 +59,7 @@ class TelegramConversationMemoryTest {
     @BeforeEach
     void installFakeModel() {
         model.receivedTurns.clear();
-        QuarkusMock.installMockForType(model, StreamingChatModel.class);
+        QuarkusMock.installMockForType(model, StreamingChatModel.class, ModelName.Literal.of("gemini"));
     }
 
     @AfterEach

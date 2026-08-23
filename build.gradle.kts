@@ -18,6 +18,7 @@ dependencies {
     implementation(enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}"))
     implementation("io.quarkiverse.langchain4j:quarkus-langchain4j-core")
     implementation("io.quarkiverse.langchain4j:quarkus-langchain4j-ai-gemini")
+    implementation("io.quarkiverse.langchain4j:quarkus-langchain4j-openai")
     implementation("io.quarkus:quarkus-arc")
     implementation("io.quarkus:quarkus-rest")
     implementation("io.quarkus:quarkus-rest-client-jackson")

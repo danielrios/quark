@@ -1,4 +1,4 @@
-package com.quark.provider.gemini;
+package com.quark.provider.nim;
 
 import com.quark.core.ChatMessage;
 import com.quark.provider.ModelGateway;
@@ -18,35 +18,28 @@ import jakarta.inject.Named;
 import java.util.List;
 
 /**
- * The only langchain4j-touching package (ADR 0002 boundaries).
+ * NIM provider gateway (Plan 5). Mirrors {@code GeminiModelGateway} — langchain4j
+ * confined to this package (ADR 0002). Uses the OpenAI-compatible NIM API via
+ * {@code quarkus-langchain4j-openai} pointed at {@code integrate.api.nvidia.com/v1}.
  *
- * <p>Wraps the {@link StreamingChatModel} bean that quarkus-langchain4j produces from
- * {@code quarkus.langchain4j.ai.gemini.*} config — injectable without any
- * {@code @RegisterAiService} (quarkiverse docs, models page).
- *
- * <p>Returns a cold {@link Multi} — the model call happens per subscription.
- *
- * <p>Downstream cancellation (e.g. the Telegram adapter's 60 s timeout) detaches
- * the emitter but cannot abort the model call: langchain4j's streaming handler
- * API exposes no cancel handle, so the underlying stream runs to completion and
- * late emissions are silently dropped. Bounded waste, no crash — future gateways
- * (Plan 5 NIM) should replicate these semantics knowingly.
+ * <p>Downstream cancellation semantics: same as Gemini — detaches the emitter but
+ * cannot abort the in-flight model call; late emissions are silently dropped.
  */
 @ApplicationScoped
-@Named("gemini")
-public class GeminiModelGateway implements ModelGateway {
+@Named("nim")
+public class NimModelGateway implements ModelGateway {
 
     private final StreamingChatModel model;
 
     @Inject
-    public GeminiModelGateway(@ModelName("gemini") StreamingChatModel model) {
+    public NimModelGateway(@ModelName("nim") StreamingChatModel model) {
         this.model = model;
     }
 
     @Override
     public Multi<String> stream(List<ChatMessage> history) {
         List<dev.langchain4j.data.message.ChatMessage> mapped =
-            history.stream().map(GeminiModelGateway::toLangChainMessage).toList();
+                history.stream().map(NimModelGateway::toLangChainMessage).toList();
         ChatRequest request = ChatRequest.builder().messages(mapped).build();
 
         return Multi.createFrom().emitter(emitter -> model.chat(request, new StreamingChatResponseHandler() {

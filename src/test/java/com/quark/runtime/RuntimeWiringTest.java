@@ -1,17 +1,21 @@
 package com.quark.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.quark.memory.ChatMemoryStore;
+import com.quark.memory.preference.ProviderPreferenceStore;
 import com.quark.provider.ModelGateway;
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import org.junit.jupiter.api.Test;
 
 /**
- * CDI wiring smoke for the Plan 4 runtime seams — replaces {@code AssistantMemoryWiringTest}; also
- * proves {@link com.quark.provider.gemini.GeminiModelGateway} instantiates against the
- * {@code %test} config {@code StreamingChatModel} bean without any {@code @RegisterAiService}.
+ * CDI wiring smoke for Plan 5 runtime seams — verifies both @Named gateways resolve,
+ * ProviderPreferenceStore wires, and AgentRuntime boots with the @Any Instance pattern.
  */
 @QuarkusTest
 class RuntimeWiringTest {
@@ -20,15 +24,41 @@ class RuntimeWiringTest {
     AgentRuntime runtime;
 
     @Inject
-    ModelGateway gateway;
+    ChatMemoryStore store;
 
     @Inject
-    ChatMemoryStore store;
+    ProviderPreferenceStore preferenceStore;
+
+    @Inject
+    @Any
+    Instance<ModelGateway> gateways;
 
     @Test
     void runtimeMachineryIsWired() {
         assertNotNull(runtime, "AgentRuntime must resolve");
-        assertNotNull(gateway, "ModelGateway must resolve (GeminiModelGateway over the StreamingChatModel bean)");
-        assertNotNull(store, "quark ChatMemoryStore must resolve (InMemoryChatMemoryStore)");
+        assertNotNull(store, "ChatMemoryStore must resolve");
+        assertNotNull(preferenceStore, "ProviderPreferenceStore must resolve");
+    }
+
+    @Test
+    void geminiGatewayResolvableByName() {
+        var selected = gateways.select(new Named() {
+            @Override public String value() { return "gemini"; }
+            @Override public Class<? extends java.lang.annotation.Annotation> annotationType() {
+                return Named.class;
+            }
+        });
+        assertTrue(selected.isResolvable(), "@Named(\"gemini\") ModelGateway must resolve");
+    }
+
+    @Test
+    void nimGatewayResolvableByName() {
+        var selected = gateways.select(new Named() {
+            @Override public String value() { return "nim"; }
+            @Override public Class<? extends java.lang.annotation.Annotation> annotationType() {
+                return Named.class;
+            }
+        });
+        assertTrue(selected.isResolvable(), "@Named(\"nim\") ModelGateway must resolve");
     }
 }

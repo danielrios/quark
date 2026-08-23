@@ -4,43 +4,32 @@ import com.quark.core.AgentEvent;
 import com.quark.core.ChatMessage;
 import com.quark.core.TurnRequest;
 import com.quark.memory.ChatMemoryStore;
+import com.quark.memory.preference.ModelPreference;
+import com.quark.memory.preference.ProviderPreferenceStore;
 import com.quark.provider.ModelGateway;
 import io.quarkus.logging.Log;
 import io.smallrye.mutiny.Multi;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * The single orchestration point for an agent turn (ADR 0001).
  *
- * <p>{@link #execute(TurnRequest)} loads conversation history, emits {@link
- * AgentEvent.TurnStarted}, {@link AgentEvent.MemoryLoaded}, and {@link AgentEvent.ModelInvoked},
- * then streams the {@link ModelGateway} token-by-token as {@link AgentEvent.TokenEmitted} while
- * accumulating the full response text. On success, both the user and assistant messages are
- * persisted to the {@link ChatMemoryStore} and the stream ends with {@link
- * AgentEvent.ModelCompleted} followed by the terminal {@link AgentEvent.TurnCompleted}.
- * Exception: a <em>blank</em> completion (zero tokens or whitespace-only) persists nothing —
- * renderers surface their error fallback for such turns, and memory agrees the turn did not
- * happen (ADR 0007).
+ * <p>Plan 5: gateway resolved per turn via the session preference chain:
+ * {@code ProviderPreferenceStore.get(sessionId)} → {@code TurnRequest.provider()} →
+ * {@code quark.provider.default} config. Unknown provider names emit {@link
+ * AgentEvent.TurnFailed} — no auto-fallback (spec §Error handling).
  *
- * <p>Any failure — before or during model invocation — becomes exactly one terminal {@link
- * AgentEvent.TurnFailed} event, and the {@link Multi} completes normally afterward; failures are
- * events, not {@code onError()}. Nothing is persisted on a failed or cancelled turn — a
- * deliberate deviation from the retired AI-service behavior (ADR 0007). One caveat: the two
- * persistence appends are not atomic, so a store whose ASSISTANT append throws can leave an
- * orphan USER message behind (unreachable with {@code InMemoryChatMemoryStore}).
- *
- * <p>{@link #execute(TurnRequest)} returns a cold {@link Multi}: each subscription re-runs the
- * whole turn, and all per-turn state (the turn id, the accumulator) lives inside the {@code
- * deferred} supplier, so concurrent subscriptions never share state.
- *
- * <p>At a saturated session the prompt carries the full stored window <em>plus</em> the pending
- * user message (window+1 conversation messages) — intended: the store bounds persisted history,
- * eviction catches up on the post-turn appends. (Plan 2's MessageWindowChatMemory counted the
- * pending message inside the window; the one-message difference is accepted.)
+ * <p>{@link #reset(String)} clears conversation memory only; it does NOT clear the
+ * provider preference — "/reset means forget history, not factory reset".
  */
 @ApplicationScoped
 public class AgentRuntime {
@@ -49,12 +38,20 @@ public class AgentRuntime {
             "You are quark, a concise and helpful assistant. Answer in plain text.";
 
     private final ChatMemoryStore memory;
-    private final ModelGateway gateway;
+    private final ProviderPreferenceStore preference;
+    private final Instance<ModelGateway> gateways;
+    private final String defaultProvider;
 
     @Inject
-    public AgentRuntime(ChatMemoryStore memory, ModelGateway gateway) {
+    public AgentRuntime(
+            ChatMemoryStore memory,
+            ProviderPreferenceStore preference,
+            @Any Instance<ModelGateway> gateways,
+            @ConfigProperty(name = "quark.provider.default") String defaultProvider) {
         this.memory = memory;
-        this.gateway = gateway;
+        this.preference = preference;
+        this.gateways = gateways;
+        this.defaultProvider = defaultProvider;
     }
 
     public Multi<AgentEvent> execute(TurnRequest request) {
@@ -63,6 +60,23 @@ public class AgentRuntime {
             String sessionId = request.sessionId();
             Log.info("turn " + turnId + " started (session " + sessionId + ")");
             try {
+                // Resolve provider: session preference > request override > global default
+                String providerName = preference.get(sessionId)
+                        .map(ModelPreference::provider)
+                        .or(request::provider)
+                        .orElse(defaultProvider);
+
+                Instance<ModelGateway> selected = gateways.select(namedLiteral(providerName));
+
+                if (!selected.isResolvable()) {
+                    Log.warn("turn " + turnId + " unknown provider: " + providerName);
+                    return Multi.createFrom().items(
+                            new AgentEvent.TurnStarted(turnId, sessionId),
+                            new AgentEvent.TurnFailed(turnId, "unknown provider: " + providerName));
+                }
+
+                ModelGateway gateway = selected.get();
+
                 List<ChatMessage> history = memory.load(sessionId);
 
                 List<ChatMessage> prompt = new ArrayList<>();
@@ -85,10 +99,6 @@ public class AgentRuntime {
                 Multi<AgentEvent> tail = Multi.createFrom().deferred(() -> {
                     String text = accumulated.toString();
                     if (text.isBlank()) {
-                        // Blank completion (zero tokens or whitespace-only): renderers show the
-                        // error fallback, so memory must agree the turn did not happen —
-                        // persisting the pair would replay an empty assistant message and
-                        // double a resent question.
                         Log.warn("turn " + turnId + " completed blank — nothing persisted");
                     } else {
                         memory.append(sessionId, userMessage);
@@ -115,19 +125,20 @@ public class AgentRuntime {
     }
 
     /**
-     * Drops all conversation memory for {@code sessionId} — the {@code /reset} path. Lives on
-     * the runtime because adapters may not touch chat memory directly (ADR 0002 boundaries).
+     * Drops conversation memory for {@code sessionId} — the {@code /reset} path.
+     * Does NOT clear provider preference (spec: /reset = forget history, not factory reset).
      */
     public void reset(String sessionId) {
         memory.delete(sessionId);
     }
 
-    /**
-     * Human-readable failure reason for {@link AgentEvent.TurnFailed}. Message-only — exception
-     * class names never enter the event stream, which Plan 6 will serialize to external SSE
-     * clients; a null or blank message falls back to a constant. The full stack trace stays in
-     * the log beside the {@code turnId}.
-     */
+    private static Annotation namedLiteral(String name) {
+        return new Named() {
+            @Override public String value() { return name; }
+            @Override public Class<? extends Annotation> annotationType() { return Named.class; }
+        };
+    }
+
     private static String reason(Throwable failure) {
         String message = failure.getMessage();
         return (message == null || message.isBlank()) ? "internal error" : message;
