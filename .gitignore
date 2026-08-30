@@ -44,6 +44,7 @@ nb-configuration.xml
 .ai/
 .roo/
 .quarkus/
+.antigravitycli/
 
 # Claude Code harness: ignore local/state files but track shared config
 .claude/*

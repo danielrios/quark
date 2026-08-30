@@ -1,0 +1,68 @@
+# =============================================================================
+# Dockerfile.claude-loop
+# Multi-model autonomous loop environment for quark
+# See: docs/adr/0007-multi-model-loop-harness.md
+# =============================================================================
+
+FROM eclipse-temurin:25-jdk-noble
+
+LABEL maintainer="danielrios" \
+      description="Claude Code autonomous loop environment for quark" \
+      project="quark"
+
+# --- System dependencies -----------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git \
+      curl \
+      jq \
+      ca-certificates \
+      unzip \
+      && rm -rf /var/lib/apt/lists/*
+
+# --- Node.js 22 LTS ----------------------------------------------------------
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Claude Code --------------------------------------------------------------
+RUN npm install -g @anthropic-ai/claude-code
+
+# --- JBang (for quarkus-agent MCP) --------------------------------------------
+RUN curl -Ls https://sh.jbang.dev | bash -s - app setup \
+    && /root/.jbang/bin/jbang trust add https://github.com/quarkusio/ \
+    && mv /root/.jbang /opt/jbang
+
+ENV PATH="/opt/jbang/bin:${PATH}"
+
+# Pre-fetch the quarkus-agent MCP jar so first run is fast
+RUN jbang --quiet quarkus-agent-mcp@quarkusio --help 2>/dev/null || true
+
+# --- Non-root user ------------------------------------------------------------
+# Claude Code refuses --dangerously-skip-permissions as root
+ARG USER_NAME=claude
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN if getent group ${USER_GID} ; then groupmod -n ${USER_NAME} $(getent group ${USER_GID} | cut -d: -f1) ; else groupadd --gid ${USER_GID} ${USER_NAME} ; fi \
+    && if getent passwd ${USER_UID} ; then usermod -l ${USER_NAME} -g ${USER_GID} -d /home/${USER_NAME} -m $(getent passwd ${USER_UID} | cut -d: -f1) ; else useradd --uid ${USER_UID} --gid ${USER_GID} -m ${USER_NAME} ; fi
+
+# Persistence directories, workspace trust, and plugin path compat
+RUN mkdir -p /home/${USER_NAME}/.claude \
+             /home/${USER_NAME}/.gradle \
+             /home/${USER_NAME}/.jbang \
+             /home/rios \
+    && cp -r /opt/jbang/* /home/${USER_NAME}/.jbang/ \
+    && echo '{"projects":{"/workspace":{"hasTrustDialogAccepted":true}}}' > /home/${USER_NAME}/.claude.json \
+    && chown -R ${USER_NAME}:${USER_NAME} /home/${USER_NAME} \
+    && rmdir /home/rios && ln -s /home/${USER_NAME} /home/rios
+
+ENV PATH="/home/${USER_NAME}/.jbang/bin:${PATH}"
+
+USER ${USER_NAME}
+WORKDIR /workspace
+
+# --- Healthcheck --------------------------------------------------------------
+HEALTHCHECK --interval=60s --timeout=5s --retries=3 \
+  CMD node -e "console.log('ok')" || exit 1
+
+ENTRYPOINT ["/bin/bash"]
